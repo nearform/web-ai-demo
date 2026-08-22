@@ -22,6 +22,14 @@
 // labelled separately and attributed to the runtime.
 
 import { probeDevice } from "./probe.js";
+import {
+  startBlackbox,
+  crumb,
+  track,
+  trackNow,
+  warnings,
+  dismissRecovered,
+} from "./blackbox.js";
 
 const fmtMs = (ms) =>
   ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${Math.round(ms)}ms`;
@@ -115,6 +123,9 @@ export const runSpike = (spike) => {
     // piece of state the `status` vocabulary can't express: the runtime is still
     // "loaded" the whole time a reply is streaming.
     abort: null,
+    // The previous session's crash record, if this page is loading after a hard
+    // kill. Recovered synchronously below, before anything can kill us again.
+    recoveredCrash: null,
   };
 
   const nodes = {};
@@ -151,6 +162,10 @@ export const runSpike = (spike) => {
 
   const setStatus = (status, detail) => {
     state.status = status;
+    // A phase change is exactly the moment worth persisting: "died while
+    // loading" and "died while idle" are different findings.
+    trackNow({ status, statusDetail: detail ?? null });
+    crumb(`status: ${status}`, detail ? { detail } : undefined);
     nodes.status.textContent = detail ? `${status} — ${detail}` : status;
     nodes.status.className = `spike-status spike-status--${status}`;
     nodes.load.disabled = status === "loading" || status === "loaded";
@@ -180,6 +195,13 @@ export const runSpike = (spike) => {
     nodes.progress.hidden = false;
     nodes.progressBar.style.width = `${Math.round(fraction * 100)}%`;
     nodes.progressText.textContent = text ?? `${Math.round(fraction * 100)}%`;
+    // Throttled: a download fires this many times a second, and each write is
+    // synchronous. How far the download got before the tab died is the single
+    // most useful field in a recovered record.
+    track({
+      progress: Number(fraction.toFixed(3)),
+      progressText: text ?? null,
+    });
   };
 
   const ctxBase = (extra = {}) => ({
@@ -212,6 +234,14 @@ export const runSpike = (spike) => {
   const doLoad = async () => {
     setStatus("loading");
     setProgress(0, "starting");
+    // The model is the thing most likely to kill the tab, so it goes into the
+    // snapshot before the attempt rather than after it.
+    trackNow({
+      phase: "load",
+      model: nodes.model?.value ?? null,
+      modelLabel: nodes.model?.selectedOptions?.[0]?.textContent ?? null,
+    });
+    crumb("load: start", { model: nodes.model?.value ?? null });
     const started = performance.now();
     try {
       const ok = await doCheck();
@@ -224,6 +254,10 @@ export const runSpike = (spike) => {
       const elapsed = performance.now() - started;
       state.runs.push({ kind: "load", ms: Math.round(elapsed) });
       logger.info(`load() finished in ${fmtMs(elapsed)}`);
+      crumb("load: ok", { ms: Math.round(elapsed) });
+      // Back to idle, or a recovered record reads as "died during load" for the
+      // whole time the page then sat there loaded and doing nothing.
+      trackNow({ phase: "idle", progress: null, progressText: null });
       setProgress(null);
       setStatus("loaded");
     } catch (err) {
@@ -232,6 +266,12 @@ export const runSpike = (spike) => {
         `load() failed after ${fmtMs(performance.now() - started)}`,
         described,
       );
+      // A load that throws is a *survivable* failure, so it lands in the log. It
+      // still gets a breadcrumb, because the next thing that happens might not be.
+      crumb("load: failed", {
+        name: described.name,
+        message: described.message,
+      });
       setProgress(null);
       setStatus("error", described.message);
     }
@@ -258,6 +298,9 @@ export const runSpike = (spike) => {
         replyText,
       ]),
     );
+
+    trackNow({ phase: "generate", turn, promptChars: prompt.length });
+    crumb(`generate: start turn ${turn}`, { promptChars: prompt.length });
 
     const started = performance.now();
     let firstChunkAt = null;
@@ -316,6 +359,10 @@ export const runSpike = (spike) => {
             text += chunk;
             replyText.textContent = text;
             nodes.output.scrollTop = nodes.output.scrollHeight;
+            // Coalesced to one write per 500 ms — see the note in blackbox.js.
+            // Untangling "died before the first token" from "died 300 tokens in"
+            // is the whole reason this field exists.
+            track({ chunks, replyChars: text.length });
           },
           stats: (s) => {
             runtimeStats = s;
@@ -340,6 +387,12 @@ export const runSpike = (spike) => {
           : `generate() turn ${turn} complete`,
         run,
       );
+      crumb(
+        controller.signal.aborted
+          ? `generate: stopped turn ${turn}`
+          : `generate: ok turn ${turn}`,
+        { chunks, replyChars: text.length },
+      );
     } catch (err) {
       const described = describeError(err);
       if (controller.signal.aborted || described.name === "AbortError") {
@@ -350,11 +403,16 @@ export const runSpike = (spike) => {
         });
       } else {
         logger.error(`generate() failed on turn ${turn}`, described);
+        crumb(`generate: failed turn ${turn}`, {
+          name: described.name,
+          message: described.message,
+        });
         replyText.textContent = `[failed: ${described.message}]`;
       }
     } finally {
       setGenerating(null);
       nodes.prompt.value = "";
+      trackNow({ phase: "idle", chunks, replyChars: text.length });
     }
   };
 
@@ -372,6 +430,7 @@ export const runSpike = (spike) => {
     state.handle = null;
     state.messages = [];
     nodes.output.replaceChildren();
+    crumb("unload: done");
     setStatus("not_loaded");
   };
 
@@ -384,6 +443,14 @@ export const runSpike = (spike) => {
     device: state.device,
     runs: state.runs,
     events: state.events,
+    // The recovered record from a previous session that died, if any. This is
+    // the only field here that can describe a run whose own diagnostics were
+    // destroyed — so it must survive into the paste-back, or a device test that
+    // killed the tab reports nothing at all.
+    recoveredCrash: state.recoveredCrash,
+    // crashbox's in-session observations: memory pressure and device-loss events
+    // seen while this page has been alive.
+    crashboxWarnings: warnings(),
   });
 
   const copyDiagnostics = async () => {
@@ -465,6 +532,9 @@ export const runSpike = (spike) => {
     nodes.log = el("div", { class: "log" });
     nodes.probe = el("pre", { class: "probe", text: "probing…" });
 
+    // Hidden unless the previous session died. Populated after build().
+    nodes.recovery = el("section", { class: "recovery", hidden: "" });
+
     const root = el("div", { class: "spike" }, [
       el("header", { class: "spike-header" }, [
         // "./" not "./index.html": the directory URL is the canonical one in both
@@ -481,6 +551,7 @@ export const runSpike = (spike) => {
         }),
       ]),
       spike.notes ? el("p", { class: "spike-notes", text: spike.notes }) : null,
+      nodes.recovery,
       el("section", { class: "panel" }, [
         el("div", { class: "panel-title", text: "Runtime" }),
         nodes.status,
@@ -528,6 +599,63 @@ export const runSpike = (spike) => {
 
   build();
 
+  // Start the black box now: before any model can be loaded, and after build()
+  // so a recovered record has a log panel to be reported into. crashbox recovers
+  // the previous session synchronously inside init(), so `recovered` is already
+  // populated when this returns.
+  const { recovered, gpuIntercepted } = startBlackbox({
+    spikeName: spike.name,
+    log: logger,
+    onMemoryPressure: (info) => {
+      // Live pressure, while we are still alive to say so. On Chromium this is
+      // read from performance.memory; on iOS Safari there is no memory API, so
+      // this fires from growth tracking or not at all.
+      logger.warn(`memory pressure: ${info?.level ?? "unknown"}`, info);
+    },
+  });
+  state.recoveredCrash = recovered ?? null;
+
+  if (recovered) {
+    // The headline. A tab that died on the last visit is the most valuable thing
+    // this page can tell you, so it goes above the panels rather than into the log
+    // — on a phone the log is several scrolls down, and the reason to look at all
+    // is that the previous attempt vanished.
+    const diedAt = new Date(recovered.lastSeen).toISOString();
+    nodes.recovery.hidden = false;
+    nodes.recovery.replaceChildren(
+      el("div", {
+        class: "recovery-title",
+        text: `Previous session crashed — ${recovered.reason}`,
+      }),
+      el("div", {
+        class: "recovery-detail",
+        text: `Last heartbeat ${diedAt}. The breadcrumb trail and the state at death are in the log below and in the copied diagnostics.`,
+      }),
+    );
+    // Surfaced, so drop it from storage — see dismissRecovered(). It stays in
+    // state.recoveredCrash and in the log for this session, so the paste-back
+    // still carries it.
+    dismissRecovered();
+    logger.error("crashbox recovered a crash from the previous session", {
+      reason: recovered.reason,
+      lastSeen: diedAt,
+      sessionId: recovered.sessionId,
+      // What the page was doing when it died. This is the field the device pass
+      // exists to produce.
+      snapshot: recovered.snapshot ?? null,
+      breadcrumbs: recovered.breadcrumbs ?? [],
+    });
+  } else {
+    logger.info(
+      "crashbox armed; previous session exited cleanly (or is first)",
+      {
+        // Reported because it is our instrumentation rather than crashbox's, and
+        // if it is false then GPU device loss will not be attributable.
+        gpuDeviceInterception: gpuIntercepted,
+      },
+    );
+  }
+
   // A tab that dies takes its console with it, so anything we can catch before
   // the end gets logged. This is not crash reporting — it's the last thing we
   // see before the runtimes that kill tabs kill this one.
@@ -561,6 +689,17 @@ export const runSpike = (spike) => {
   probeDevice().then((device) => {
     state.device = device;
     nodes.probe.textContent = JSON.stringify(device, null, 2);
+    // A recovered record has to say what hardware it died on, and the crashed
+    // session cannot tell us afterwards. Keep it to the few fields that identify
+    // the device — the snapshot is byte-capped and shared with the live state.
+    trackNow({
+      device: {
+        looksLikeIos: device.looksLikeIos,
+        maxBufferSizeMb: device.webgpu.limits?.maxBufferSizeMb ?? null,
+        webgpu: device.webgpu.available,
+        userAgent: device.userAgent,
+      },
+    });
     log("info", "Device probed", {
       webgpu: device.webgpu.available,
       maxBufferSizeMb: device.webgpu.limits?.maxBufferSizeMb ?? null,

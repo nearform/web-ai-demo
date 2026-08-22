@@ -15,6 +15,17 @@
   <body>
     <div id="root"></div>
 
+    <!--
+      This spike imports no runtime — Chrome's model is a built-in global — but it
+      still needs the import map, because the shared harness imports crashbox.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "crashbox": "https://cdn.jsdelivr.net/npm/crashbox@0.1.0/+esm"
+        }
+      }
+    </script>
     <script type="module" src="./chrome-prompt-api.js"></script>
   </body>
 </html>

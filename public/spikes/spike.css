@@ -250,3 +250,27 @@
   font-size: 0.85rem;
   color: var(--color-text-muted);
 }
+
+/* Recovered-crash banner. Hidden unless crashbox found that the previous session
+   died. Deliberately loud: on a phone, the reason you reopened the page is that
+   the last attempt disappeared, and the log is several scrolls down. */
+.recovery {
+  border: 1px solid #b3261e;
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: #2a1512;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.recovery-title {
+  font-weight: 600;
+  color: #f2b8b5;
+}
+
+.recovery-detail {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: #e6d0ce;
+}

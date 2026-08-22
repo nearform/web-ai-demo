@@ -104,6 +104,20 @@
           Diagnostics stay on your device. Nothing on these pages is
           transmitted, collected, or reported anywhere.
         </p>
+        <p class="spike-notes">
+          These pages also carry a crash black box (<a
+            href="https://github.com/nearform/crashbox"
+            target="_blank"
+            rel="noopener noreferrer"
+            >crashbox</a
+          >), because the failure worth studying here — a tab killed outright by
+          a WebGPU or WASM out-of-memory — destroys its own evidence: no
+          JavaScript runs at the moment of death. So a few breadcrumbs and a
+          small state snapshot are kept in <code>localStorage</code> as you go,
+          and if a page died last time you were here it says so on reopening.
+          That is also local only, and it is per-page: nothing leaves the
+          device.
+        </p>
       </section>
     </div>
 

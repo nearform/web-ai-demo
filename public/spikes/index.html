@@ -2,6 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // This page is a directory index, so every relative URL below — the
+      // stylesheets and all five spike links — is resolved against the directory
+      // the browser thinks we are in. GitHub Pages redirects /spikes to /spikes/
+      // and that works out. `serve` answers /spikes with a 200 and no redirect,
+      // so the base is /public/ instead and everything resolves one level up.
+      //
+      // Fixing it server-side does not work: serve's cleanUrls turn spike pages
+      // into extensionless paths, and adding trailingSlash to those makes
+      // /spikes/wllama/ the base, which breaks the spike pages' own ./spike.css
+      // and ./wllama.js. So normalise the URL here instead and leave the links
+      // plain relative.
+      (function () {
+        var p = location.pathname;
+        if (!/\/$/.test(p) && !/\.html?$/i.test(p)) {
+          location.replace(p + "/" + location.search + location.hash);
+        }
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link
       rel="icon"
@@ -15,7 +34,7 @@
   <body>
     <div class="spike">
       <header class="spike-header">
-        <a class="back" href="../index.html">← demo</a>
+        <a class="back" href="../">← demo</a>
         <h1>Reality-check spikes</h1>
       </header>
       <p class="spike-notes">
@@ -29,24 +48,39 @@
         <div class="panel-title">Runtimes</div>
         <ul class="spike-list">
           <li>
-            <a href="./chrome-prompt-api.html">Chrome Prompt API</a>
-            <p>Built-in model, no download in our page. Chrome only.</p>
-          </li>
-          <li>
             <a href="./web-llm.html">web-llm</a>
-            <p>MLC-compiled models over WebGPU. OpenAI-shaped API.</p>
-          </li>
-          <li>
-            <a href="./transformers-js.html">Transformers.js</a>
-            <p>ONNX Runtime Web. Broadest model selection.</p>
-          </li>
-          <li>
-            <a href="./litert.html">LiteRT.js</a>
-            <p>Google's on-device runtime. Newest of the five.</p>
+            <p>
+              MLC-compiled models over WebGPU. OpenAI-shaped API.
+              <strong>Wired up</strong> — 0.2.84, catalog read at runtime.
+            </p>
           </li>
           <li>
             <a href="./wllama.html">wllama</a>
-            <p>llama.cpp in WASM. Loads Hugging Face GGUFs directly.</p>
+            <p>
+              llama.cpp in WASM. Loads Hugging Face GGUFs directly.
+              <strong>Wired up</strong> — 3.6.0, WebGPU on by default.
+            </p>
+          </li>
+          <li>
+            <a href="./chrome-prompt-api.html">Chrome Prompt API</a>
+            <p>
+              Built-in model, no download in our page. Chrome only.
+              <em>Not wired up yet.</em>
+            </p>
+          </li>
+          <li>
+            <a href="./transformers-js.html">Transformers.js</a>
+            <p>
+              ONNX Runtime Web. Broadest model selection.
+              <em>Not wired up yet.</em>
+            </p>
+          </li>
+          <li>
+            <a href="./litert.html">LiteRT-LM</a>
+            <p>
+              Google's on-device runtime. Newest of the five.
+              <em>Not wired up yet.</em>
+            </p>
           </li>
         </ul>
       </section>

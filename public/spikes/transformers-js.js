@@ -12,7 +12,9 @@ runSpike({
   notes:
     "ONNX Runtime Web over WebGPU. Widest model choice, and the chat template is ours to apply.",
   // TODO(research): real model ids and real download sizes, read off the source
-  // of truth rather than remembered.
+  // of truth rather than remembered — and selected per ../../MODELS.md (Gemma 4
+  // yes, Gemma 3 and earlier never, latest Qwen, one entry inside the iPhone
+  // budget, language models only).
   models: [],
   defaultPrompt: "In one sentence, what is WebGPU?",
 

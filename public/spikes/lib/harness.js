@@ -1,4 +1,4 @@
-/* global document:false, window:false, performance:false, navigator:false, console:false */
+/* global document:false, window:false, performance:false, navigator:false, console:false, AbortController:false */
 
 // Spike harness. Deliberately dependency-free — no React, no shared provider
 // abstraction — so that when a spike fails, the failure is unambiguously the
@@ -7,8 +7,14 @@
 // this machine, today.
 //
 // A spike supplies four functions (`check`, `load`, `generate`, `unload`) and the
-// harness supplies everything around them: UI, timing, conversation state, and
-// verbatim error capture.
+// harness supplies everything around them: UI, timing, conversation state,
+// cancellation, and verbatim error capture.
+//
+// On cancellation: `generate` receives an `AbortSignal`. It matters more than it
+// looks — on a phone a small model decodes slowly enough that a runaway generation
+// would otherwise have to be killed with the tab, and killing the tab takes the
+// diagnostics with it. An abort is recorded as a run with `aborted: true`, not as
+// a failure; how far a runtime got before being stopped is data too.
 //
 // On honest measurement: the harness counts *chunks* delivered to `onChunk`, not
 // tokens, because a chunk is what we can actually observe. A runtime that reports
@@ -58,6 +64,10 @@ export const runSpike = (spike) => {
     device: null,
     runs: [],
     events: [],
+    // The AbortController for an in-flight generate, or null. This is the one
+    // piece of state the `status` vocabulary can't express: the runtime is still
+    // "loaded" the whole time a reply is streaming.
+    abort: null,
   };
 
   const nodes = {};
@@ -99,6 +109,20 @@ export const runSpike = (spike) => {
     nodes.load.disabled = status === "loading" || status === "loaded";
     nodes.ask.disabled = status !== "loaded";
     nodes.unload.disabled = status !== "loaded";
+  };
+
+  // Generation is orthogonal to `status` — the runtime stays "loaded" while a
+  // reply streams — so Ask and Stop are driven from here instead.
+  const setGenerating = (controller) => {
+    state.abort = controller;
+    nodes.stop.disabled = controller === null;
+    nodes.ask.disabled = controller !== null || state.status !== "loaded";
+  };
+
+  const doStop = () => {
+    if (!state.abort) return;
+    logger.info("Stop requested; aborting generation");
+    state.abort.abort();
   };
 
   const setProgress = (fraction, text) => {
@@ -170,7 +194,8 @@ export const runSpike = (spike) => {
     const prompt = nodes.prompt.value.trim();
     if (!prompt) return;
 
-    nodes.ask.disabled = true;
+    const controller = new AbortController();
+    setGenerating(controller);
     state.messages.push({ role: "user", content: prompt });
     const turn = state.messages.filter((m) => m.role === "user").length;
     const answer = el("div", { class: "turn" }, [
@@ -193,6 +218,38 @@ export const runSpike = (spike) => {
     let text = "";
     let runtimeStats = null;
 
+    // Built in both the completed and the aborted path, so a stopped generation
+    // produces the same shape of record as a finished one.
+    const recordRun = (aborted) => {
+      const total = performance.now() - started;
+      const ttft = firstChunkAt === null ? null : firstChunkAt - started;
+      const run = {
+        kind: "generate",
+        turn,
+        promptChars: prompt.length,
+        replyChars: text.length,
+        totalMs: Math.round(total),
+        timeToFirstChunkMs: ttft === null ? null : Math.round(ttft),
+        chunks,
+        // Chunks, not tokens. See the note at the top of this file.
+        chunksPerSecond:
+          ttft === null || total === ttft
+            ? null
+            : Number((chunks / ((total - ttft) / 1000)).toFixed(1)),
+        runtimeReportedStats: runtimeStats,
+        aborted,
+      };
+      // The partial reply is part of the conversation whether we stopped it or
+      // not, and the next turn's prefix depends on it being here. An empty one is
+      // not: stopping before the first chunk would otherwise leave a blank
+      // assistant turn in the history, which some chat templates reject.
+      if (text.length > 0) {
+        state.messages.push({ role: "assistant", content: text });
+      }
+      state.runs.push(run);
+      return run;
+    };
+
     try {
       await spike.generate(
         ctxBase({
@@ -213,40 +270,43 @@ export const runSpike = (spike) => {
           stats: (s) => {
             runtimeStats = s;
           },
+          signal: controller.signal,
         }),
       );
 
-      const total = performance.now() - started;
-      const ttft = firstChunkAt === null ? null : firstChunkAt - started;
-      const run = {
-        kind: "generate",
-        turn,
-        promptChars: prompt.length,
-        replyChars: text.length,
-        totalMs: Math.round(total),
-        timeToFirstChunkMs: ttft === null ? null : Math.round(ttft),
-        chunks,
-        // Chunks, not tokens. See the note at the top of this file.
-        chunksPerSecond:
-          ttft === null || total === ttft
-            ? null
-            : Number((chunks / ((total - ttft) / 1000)).toFixed(1)),
-        runtimeReportedStats: runtimeStats,
-      };
-      state.messages.push({ role: "assistant", content: text });
-      state.runs.push(run);
-      logger.info(`generate() turn ${turn} complete`, run);
+      // A runtime may honour an abort by simply returning early rather than
+      // throwing — web-llm's interruptGenerate() does exactly that — so the
+      // signal, not the control flow, decides whether this was a stop.
+      const run = recordRun(controller.signal.aborted);
+      logger.info(
+        controller.signal.aborted
+          ? `generate() turn ${turn} stopped after ${chunks} chunks`
+          : `generate() turn ${turn} complete`,
+        run,
+      );
     } catch (err) {
       const described = describeError(err);
-      logger.error(`generate() failed on turn ${turn}`, described);
-      replyText.textContent = `[failed: ${described.message}]`;
+      if (controller.signal.aborted || described.name === "AbortError") {
+        const run = recordRun(true);
+        logger.info(`generate() turn ${turn} stopped after ${chunks} chunks`, {
+          ...run,
+          threw: described.name,
+        });
+      } else {
+        logger.error(`generate() failed on turn ${turn}`, described);
+        replyText.textContent = `[failed: ${described.message}]`;
+      }
     } finally {
-      nodes.ask.disabled = state.status !== "loaded";
+      setGenerating(null);
       nodes.prompt.value = "";
     }
   };
 
   const doUnload = async () => {
+    // Unload stays clickable mid-generation, because status is still "loaded".
+    // Tearing the engine out from under a running stream is the kind of thing
+    // that produces an unhelpful error, so stop first.
+    if (state.abort) state.abort.abort();
     try {
       await spike.unload?.(ctxBase({ handle: state.handle }));
       logger.info("unload() finished");
@@ -339,13 +399,22 @@ export const runSpike = (spike) => {
       disabled: "",
       onclick: doUnload,
     });
+    nodes.stop = el("button", {
+      class: "btn",
+      text: "Stop",
+      disabled: "",
+      onclick: doStop,
+    });
     nodes.output = el("div", { class: "output" });
     nodes.log = el("div", { class: "log" });
     nodes.probe = el("pre", { class: "probe", text: "probing…" });
 
     const root = el("div", { class: "spike" }, [
       el("header", { class: "spike-header" }, [
-        el("a", { class: "back", href: "./index.html", text: "← all spikes" }),
+        // "./" not "./index.html": the directory URL is the canonical one in both
+        // serve and Pages, so it lands in one hop instead of bouncing through a
+        // rewrite — and avoids the index page having to normalise its own URL.
+        el("a", { class: "back", href: "./", text: "← all spikes" }),
         el("h1", { text: spike.name }),
         el("a", {
           class: "docs",
@@ -379,7 +448,7 @@ export const runSpike = (spike) => {
           el("span", { text: "Prompt" }),
           nodes.prompt,
         ]),
-        el("div", { class: "btn-row" }, nodes.ask),
+        el("div", { class: "btn-row" }, [nodes.ask, nodes.stop]),
       ]),
       el("section", { class: "panel" }, [
         el("div", { class: "panel-title", text: "Device" }),

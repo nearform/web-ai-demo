@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "npx serve -p 4710",
+    "dev:isolated": "npx serve -p 4711 --config serve.isolated.json",
     "lint:fix": "eslint . --fix",
     "lint:check": "eslint . --quiet",
     "pretty:fix": "prettier . --write",

@@ -6,6 +6,10 @@
 // TODO(research): fill in from the Chrome Prompt API research block before
 // running. Do not guess the API surface; every call below needs a documented
 // signature behind it.
+//
+// No model picker here, deliberately: the model is built into the browser, so
+// ../../MODELS.md does not apply — no format, no download, no choice. That
+// absence is itself one of the article's points.
 
 import { runSpike } from "./lib/harness.js";
 

@@ -12,7 +12,10 @@ runSpike({
   notes:
     "Google's on-device runtime. Streams weights to the GPU; packaging of the model file matters.",
   // TODO(research): real model ids and real download sizes, read off the source
-  // of truth rather than remembered.
+  // of truth rather than remembered — and selected per ../../MODELS.md. Note
+  // this runtime makes the policy nearly moot: the only `-web.litertlm` builds
+  // that exist are Gemma 4 and a handful of others, and none is under 1 GB, so
+  // there is no iPhone-budget entry to offer at all.
   models: [],
   defaultPrompt: "In one sentence, what is WebGPU?",
 

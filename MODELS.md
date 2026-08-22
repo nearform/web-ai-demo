@@ -83,6 +83,39 @@ size. Two findings fall straight out of the filter:
 Embeddings are excluded properly via the catalog's own `model_type` field
 (`ModelType.embedding`), not by guessing at names.
 
+**LiteRT-LM** is where this policy runs out of road, and the emptiness is the
+finding rather than a gap in the list. Rule 4 wants an entry under ~400 MB so a
+phone has something to run; **there is nothing to offer.** Measured 2026-08-22 by
+running it, not by reading the catalog:
+
+| Model                 | Size     | Backend       | Result                                                      |
+| --------------------- | -------- | ------------- | ----------------------------------------------------------- |
+| `gemma-4-tiny-random` | 25 MiB   | `CPU`         | Loads. Random weights — loader probe only, output is noise  |
+| `gemma-4-tiny-random` | 25 MiB   | `GPU_ARTISAN` | **Fails** — `Streaming HF_Tokenizer_Zlib … not supported`   |
+| `MiniCPM5-1B-web`     | 1052 MiB | `GPU_ARTISAN` | **Fails** — same error, despite `-web` in the filename      |
+| `MiniCPM5-1B-web`     | 1052 MiB | `CPU`         | Loads and answers. Prefill 5.6 tok/s — ~70x slower than GPU |
+| `gemma-4-E2B-it-web`  | 1915 MiB | `GPU_ARTISAN` | **Loads and holds a five-turn conversation**                |
+
+Three consequences for the picker:
+
+1. **On the default backend the catalog is Google's allowlist of two**, and that is
+   not a conservative reading of the docs — a community `-web.litertlm` downloads
+   and then refuses to load. Rule 6 ("latest generation only") is moot when the
+   generation has one publisher.
+2. **The smallest thing that works is 1915 MiB**, ~5x the iPhone budget. So this
+   runtime is desktop-only by arithmetic, and the picker says so in its labels
+   rather than implying a phone option exists.
+3. **The backend belongs in the model id.** It is not a detail: it decides whether
+   the `-web` packaging requirement applies at all, and whether prefill is 5.6 or
+   500 tok/s. The spike encodes it as `BACKEND|url` for that reason. `Backend.GPU`
+   is deliberately not offered — the tab-crash claim is untested and should stay a
+   deliberate act.
+
+Note rule 2 (no Gemma 3 or earlier) removes what would otherwise look like the
+answer here: the small MediaPipe `-web.task` files at 238 MB and 668 MB are all
+Gemma 3, and they are gated behind a 401 anyway. Licence and policy land on the
+same files, from two directions.
+
 ## Thinking is off, everywhere
 
 Every provider in this repo disables reasoning output: `enable_thinking: false`,

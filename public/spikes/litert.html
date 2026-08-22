@@ -10,15 +10,23 @@
     />
     <link rel="stylesheet" href="../styles.css" />
     <link rel="stylesheet" href="./spike.css" />
-    <title>LiteRT.js — spike</title>
+    <title>LiteRT-LM — spike</title>
   </head>
   <body>
     <div id="root"></div>
 
+    <!--
+      PINNED, and the pin is load-bearing. `dist-tags.latest` is 0.16.0, which is
+      an empty publish — one package.json, no dist/, no wasm/ — so Google's own
+      documented URL, /npm/@litert-lm/core/+esm, 404s. v0.16.1 is tagged on GitHub
+      and never published. Re-checked 2026-08-22; see litert.js for the detail.
+      The +esm bundle pulls @litertjs/wasm-utils from jsDelivr by root-relative
+      URL, so this one entry is the whole import map.
+    -->
     <script type="importmap">
       {
         "imports": {
-          "@litert-lm/core": "TODO_RESEARCH_CDN_SPECIFIER"
+          "@litert-lm/core": "https://cdn.jsdelivr.net/npm/@litert-lm/core@0.15.0/+esm"
         }
       }
     </script>

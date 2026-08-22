@@ -1,0 +1,252 @@
+/* Spike pages: intentionally plain. Shares the palette with the app, and nothing
+   else — a spike should have no dependency that could be blamed for a failure. */
+
+.spike {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.spike-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.spike-header h1 {
+  font-size: 1.3rem;
+  margin: 0;
+  flex: 1;
+}
+
+.spike-header a {
+  color: var(--color-accent-dark);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.spike-notes {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin: 0 0 16px;
+}
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.panel-title {
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.spike-status {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  background: var(--color-bg);
+}
+
+.spike-status--loaded {
+  background: #d8f7ec;
+  color: #045c42;
+}
+
+.spike-status--loading {
+  background: #fff4d6;
+  color: #7a5200;
+}
+
+.spike-status--error,
+.spike-status--unavailable {
+  background: #fde2e2;
+  color: #8a1c1c;
+}
+
+.progress {
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-track {
+  flex: 1;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0;
+  background: var(--color-accent-dark);
+  transition: width 0.2s ease;
+}
+
+.progress-text {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  min-width: 10ch;
+}
+
+.control {
+  display: block;
+  margin: 10px 0;
+}
+
+.control > span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.control-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--color-bg);
+}
+
+.control-input--area {
+  resize: vertical;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.btn {
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent-dark);
+  font-weight: 600;
+}
+
+.output {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.turn {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.turn-role {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.turn-text {
+  white-space: pre-wrap;
+  font-size: 0.92rem;
+}
+
+.turn--model .turn-text {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.log {
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
+}
+
+.log-line {
+  padding: 3px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.log-line--warn .log-msg {
+  color: #7a5200;
+}
+
+.log-line--error .log-msg {
+  color: #8a1c1c;
+}
+
+.log-time {
+  color: var(--color-text-muted);
+  margin-right: 8px;
+}
+
+.log-data,
+.probe {
+  background: var(--color-bg);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 4px 0 0;
+  overflow-x: auto;
+  font-size: 0.75rem;
+  white-space: pre;
+}
+
+.probe {
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.spike-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.spike-list li {
+  border-bottom: 1px solid var(--color-border);
+  padding: 10px 0;
+}
+
+.spike-list a {
+  font-weight: 600;
+  color: var(--color-accent-dark);
+  text-decoration: none;
+}
+
+.spike-list p {
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}

@@ -10,6 +10,25 @@ Planned stops on the tour:
 - [LiteRT.js](https://ai.google.dev/edge/litert/web)
 - [wllama](https://github.com/ngxson/wllama)
 
+Everything runs locally in the browser. No backend, no build step, and no data
+of any kind is collected or transmitted — the diagnostics these pages produce
+stay on your device.
+
+## Spikes
+
+Before the unified demo, each runtime gets a throwaway page under
+[`public/spikes/`](public/spikes/): latest version of the library, the smallest
+model it offers, no shared abstraction. Each answers one question — does this
+load and generate on this device, today — and captures the verbatim error when it
+doesn't.
+
+```sh
+npm run dev     # then open http://localhost:4710/public/spikes/
+```
+
+The spikes deliberately share no provider code with each other. When one fails,
+the failure is the runtime's and not an abstraction's.
+
 ## Development
 
 ```sh

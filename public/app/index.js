@@ -31,8 +31,17 @@ export const App = () => html`
 
     <main className="content">
       <section className="card">
-        <h2>Hello world</h2>
-        <p>Nothing here yet — this is the starting point for the demos.</p>
+        <h2>Under construction</h2>
+        <p>
+          The unified demo isn't built yet. In the meantime the${" "}
+          <a href="./spikes/index.html">reality-check spikes</a> are live: one
+          bare page per runtime, no shared abstraction, answering whether each
+          one loads and generates on your device right now.
+        </p>
+        <p>
+          Everything runs locally in your browser. Nothing is collected or sent
+          anywhere.
+        </p>
       </section>
     </main>
 

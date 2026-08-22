@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="icon"
+      href="https://nearform.com/favicon.ico"
+      type="image/x-icon"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./spike.css" />
+    <title>Spikes — Web AI Demo</title>
+  </head>
+  <body>
+    <div class="spike">
+      <header class="spike-header">
+        <a class="back" href="../index.html">← demo</a>
+        <h1>Reality-check spikes</h1>
+      </header>
+      <p class="spike-notes">
+        One throwaway page per runtime, no shared abstraction, latest version of
+        each library, smallest model it offers. Each answers one question: does
+        it load and emit tokens, on this device, today. Nothing here is the demo
+        — the demo is built from what these find out.
+      </p>
+
+      <section class="panel">
+        <div class="panel-title">Runtimes</div>
+        <ul class="spike-list">
+          <li>
+            <a href="./chrome-prompt-api.html">Chrome Prompt API</a>
+            <p>Built-in model, no download in our page. Chrome only.</p>
+          </li>
+          <li>
+            <a href="./web-llm.html">web-llm</a>
+            <p>MLC-compiled models over WebGPU. OpenAI-shaped API.</p>
+          </li>
+          <li>
+            <a href="./transformers-js.html">Transformers.js</a>
+            <p>ONNX Runtime Web. Broadest model selection.</p>
+          </li>
+          <li>
+            <a href="./litert.html">LiteRT.js</a>
+            <p>Google's on-device runtime. Newest of the five.</p>
+          </li>
+          <li>
+            <a href="./wllama.html">wllama</a>
+            <p>llama.cpp in WASM. Loads Hugging Face GGUFs directly.</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">This device</div>
+        <pre class="probe" id="probe">probing…</pre>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">Note</div>
+        <p class="spike-notes">
+          Diagnostics stay on your device. Nothing on these pages is
+          transmitted, collected, or reported anywhere.
+        </p>
+      </section>
+    </div>
+
+    <script type="module">
+      import { probeDevice } from "./lib/probe.js";
+
+      probeDevice().then((device) => {
+        document.getElementById("probe").textContent = JSON.stringify(
+          device,
+          null,
+          2,
+        );
+      });
+    </script>
+  </body>
+</html>

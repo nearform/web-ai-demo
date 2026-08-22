@@ -90,17 +90,19 @@ export const crumb = (msg, data) => {
 };
 
 /**
- * Drop the recovered record from storage, once it has been surfaced.
+ * Acknowledge the recovered record.
  *
- * NOT optional, and forgetting it is a self-inflicted false positive: the record
- * persists until cleared, so every later load re-reports the same old crash and
- * the banner stops meaning anything. Caught exactly that way — a clean-exit test
- * came back "FALSE POSITIVE" and the culprit was a real crash from ten minutes
- * earlier still sitting in localStorage.
+ * This does NOT clear storage, and it is not what stops a crash being re-reported.
+ * crashbox's own `recoverPrevious()` removes the persisted record on the load that
+ * delivers it ("fire-once delivery"), so re-reporting cannot happen; verified over
+ * three consecutive loads after an induced crash. `clearRecovered()` nulls the
+ * in-memory `lastRecovered` that the `window.__crashbox` debug handle reports, so
+ * calling it just keeps that handle honest once we have surfaced the record.
  *
- * Trade-off worth knowing on a phone: clearing on sight means a reload loses the
- * banner. The record stays in this session's log and in the copied diagnostics, so
- * the rule for a device pass is **hit Copy diagnostics before anything else.**
+ * Consequence for a device pass, and it comes from fire-once delivery rather than
+ * from this call: a reload loses the banner. The record stays in this session's log
+ * and in the copied diagnostics, so the rule is **hit Copy diagnostics before
+ * anything else.**
  */
 export const dismissRecovered = () => {
   if (!started) return;

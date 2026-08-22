@@ -632,9 +632,10 @@ export const runSpike = (spike) => {
         text: `Last heartbeat ${diedAt}. The breadcrumb trail and the state at death are in the log below and in the copied diagnostics.`,
       }),
     );
-    // Surfaced, so drop it from storage — see dismissRecovered(). It stays in
-    // state.recoveredCrash and in the log for this session, so the paste-back
-    // still carries it.
+    // Acknowledge it. crashbox already consumed the persisted record when it
+    // delivered this one, so this only keeps the debug handle in sync — see
+    // dismissRecovered(). The record lives on in state.recoveredCrash and in the
+    // log, so the paste-back still carries it.
     dismissRecovered();
     logger.error("crashbox recovered a crash from the previous session", {
       reason: recovered.reason,

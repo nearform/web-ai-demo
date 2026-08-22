@@ -17,10 +17,14 @@ stay on your device.
 ## Spikes
 
 Before the unified demo, each runtime gets a throwaway page under
-[`public/spikes/`](public/spikes/): latest version of the library, the smallest
-model it offers, no shared abstraction. Each answers one question — does this
-load and generate on this device, today — and captures the verbatim error when it
-doesn't.
+[`public/spikes/`](public/spikes/): latest version of the library, models chosen by
+the repo-wide policy in [MODELS.md](MODELS.md), no shared abstraction. Each answers
+one question — does this load and generate on this device, today — and captures the
+verbatim error when it doesn't.
+
+**Four of the five are wired up**: web-llm, wllama, the Chrome Prompt API and
+Transformers.js, all verified on desktop Chrome. LiteRT-LM is still a stub. The
+failures that matter are on Safari and on a phone, and those are not covered yet.
 
 ```sh
 npm run dev     # then open http://localhost:4710/public/spikes/

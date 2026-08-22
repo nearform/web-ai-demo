@@ -150,7 +150,7 @@ runSpike({
   name: "web-llm",
   docs: "https://github.com/mlc-ai/web-llm",
   notes:
-    "MLC-compiled weights over WebGPU. Model list is read from the library's own prebuiltAppConfig at load time.",
+    "MLC-compiled weights over WebGPU. The model list is read from the library's own prebuiltAppConfig at load time, then filtered by the repo model policy — 163 entries down to 13. The log says what was dropped and why.",
   defaultPrompt: "In one sentence, what is WebGPU?",
 
   loadModels: async ({ log }) => {

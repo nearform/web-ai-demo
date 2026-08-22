@@ -40,6 +40,53 @@ const el = (tag, props = {}, children = []) => {
   return node;
 };
 
+// Degenerate-output detection.
+//
+// A small model that loads fine and then loops — "micro-server-agnostic,
+// micro-server-agnostic, micro-server-agnostic…" — is a different failure from one
+// that crashes, and it is the failure that actually decides whether a model that
+// FITS a device is usable on it. "Gibberish" is not a publishable observation; a
+// ratio is. So this is measured, not eyeballed, and it lives in the harness rather
+// than in a spike so the number means the same thing for all five runtimes.
+//
+// distinct3 is the standard diversity metric: unique word trigrams over total.
+// Healthy prose sits high; a repetition loop collapses it. topPhraseRepeat counts
+// the most-repeated 4-gram, which catches a loop that is otherwise wordy.
+const textQuality = (text) => {
+  const words = text.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
+  // Below a dozen words the ratios are noise, so report the count and abstain
+  // rather than emitting a confident-looking number.
+  if (words.length < 12) {
+    return { words: words.length, distinct3: null, looksDegenerate: null };
+  }
+  const ngrams = (n) => {
+    const counts = new Map();
+    for (let i = 0; i + n <= words.length; i += 1) {
+      const key = words.slice(i, i + n).join(" ");
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  };
+  const tri = ngrams(3);
+  const distinct3 = Number((tri.size / (words.length - 2)).toFixed(3));
+  let topPhraseRepeat = 0;
+  let topPhrase = null;
+  for (const [phrase, n] of ngrams(4)) {
+    if (n > topPhraseRepeat) {
+      topPhraseRepeat = n;
+      topPhrase = phrase;
+    }
+  }
+  return {
+    words: words.length,
+    distinct3,
+    topPhraseRepeat,
+    // Only worth naming when it is actually repeating.
+    topPhrase: topPhraseRepeat >= 3 ? topPhrase : null,
+    looksDegenerate: distinct3 < 0.5 || topPhraseRepeat >= 5,
+  };
+};
+
 const modelOption = (m) =>
   el("option", {
     value: m.id,
@@ -238,6 +285,9 @@ export const runSpike = (spike) => {
             : Number((chunks / ((total - ttft) / 1000)).toFixed(1)),
         runtimeReportedStats: runtimeStats,
         aborted,
+        // Whether the reply is usable prose, as a number rather than an
+        // impression. See textQuality above.
+        quality: textQuality(text),
       };
       // The partial reply is part of the conversation whether we stopped it or
       // not, and the next turn's prefix depends on it being here. An empty one is
@@ -278,6 +328,12 @@ export const runSpike = (spike) => {
       // throwing — web-llm's interruptGenerate() does exactly that — so the
       // signal, not the control flow, decides whether this was a stop.
       const run = recordRun(controller.signal.aborted);
+      if (run.quality?.looksDegenerate) {
+        logger.warn(
+          `Reply looks degenerate: distinct-trigram ratio ${run.quality.distinct3}, most-repeated phrase seen ${run.quality.topPhraseRepeat}x`,
+          run.quality,
+        );
+      }
       logger.info(
         controller.signal.aborted
           ? `generate() turn ${turn} stopped after ${chunks} chunks`

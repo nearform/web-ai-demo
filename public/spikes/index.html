@@ -39,9 +39,12 @@
       </header>
       <p class="spike-notes">
         One throwaway page per runtime, no shared abstraction, latest version of
-        each library, smallest model it offers. Each answers one question: does
-        it load and emit tokens, on this device, today. Nothing here is the demo
-        — the demo is built from what these find out.
+        each library. Models follow one policy across the repo — Gemma 4 where
+        the runtime can run it, never Gemma 3 or earlier, the latest Qwen with a
+        browser-sized variant, and at least one model small enough for a phone.
+        Each page answers one question: does it load and emit tokens, on this
+        device, today. Nothing here is the demo — the demo is built from what
+        these find out.
       </p>
 
       <section class="panel">
@@ -73,7 +76,8 @@
             <a href="./transformers-js.html">Transformers.js</a>
             <p>
               ONNX Runtime Web. Broadest model selection.
-              <em>Not wired up yet.</em>
+              <strong>Wired up</strong> — 4.2.0, dtype q4; q4f16 silently
+              generates nothing on WebGPU.
             </p>
           </li>
           <li>

@@ -112,8 +112,21 @@ export const DESCRIPTORS = [
         "`destroy()` ends the session and makes later prompts reject. The model is shared across origins and the page cannot free or measure it.",
     },
     device: {
-      fits: "desktop-and-mobile",
-      note: "No weights to fit, so where the API exists it runs. It is Chrome-only and absent from iOS browsers.",
+      // NOT "any device". There are no weights to fit, which makes the device
+      // capacity question trivial — but availability is the binding constraint
+      // instead, and it is narrower than any of the other four.
+      fits: "chrome-desktop",
+      // The badge uses `fits` and shows the binding constraint, which here is the
+      // browser. The Device row answers the capacity question instead, so it gets
+      // its own label rather than repeating the badge.
+      label: "no weights to fit",
+      tone: "good",
+      note: "No weights to fit, so device memory is not the limit here. Availability is: Chrome documents Windows 10/11, macOS 13+, Linux, and ChromeOS on Chromebook Plus devices only. It also documents minimum hardware — 22 GB free disk, and either more than 4 GB of VRAM or 16 GB of RAM with 4 cores.",
+    },
+    browsers: {
+      label: "Chrome desktop",
+      tone: "bad",
+      note: "Chrome 148+ on the web. Chrome's documentation states that Chrome for Android, iOS and ChromeOS on non-Chromebook Plus devices are not supported by the APIs that use foundation models. Every iOS browser, including Chrome for iOS, runs on WebKit and so does not have it. There is no Firefox or Safari implementation.",
     },
     models: null,
   },
@@ -187,6 +200,11 @@ export const DESCRIPTORS = [
       fits: "phone-possible",
       note: "Desktop for most of the catalog. Only the smallest entries are plausible on a phone.",
     },
+    browsers: {
+      label: "needs WebGPU",
+      tone: "warn",
+      note: "Any browser with WebGPU; there is no CPU fallback, so this page's check refuses to load without an adapter. Most `q4f16_1` models also declare the `shader-f16` feature.",
+    },
     models: null, // read from the library at pick time
   },
 
@@ -257,6 +275,11 @@ export const DESCRIPTORS = [
     device: {
       fits: "phone-possible",
       note: "The whole model stays in main memory even with layers on the GPU, against a 4 GiB WASM limit. The smallest GGUFs are the plausible phone candidates.",
+    },
+    browsers: {
+      label: "any, WebGPU optional",
+      tone: "good",
+      note: "Runs without WebGPU by falling back to single-threaded CPU. It also selects between four WASM builds on JSPI and Memory64 support, so Safari gets an Asyncify build rather than failing.",
     },
     models: [
       {
@@ -350,9 +373,13 @@ export const DESCRIPTORS = [
     },
     device: {
       fits: "desktop",
-      // Upstream: dtype q4 rather than q4f16 (issues #1599, #1416); Safari gets a
-      // non-asyncify ORT build, addressed by unreleased PR #1700.
-      note: "Desktop. dtype is q4 rather than q4f16, and on Safari 4.2.0 selects an ORT build without WebGPU support; upstream PR #1700 addresses that and is unreleased.",
+      // Upstream: dtype q4 rather than q4f16 (issues #1599, #1416).
+      note: "Desktop. dtype is q4 rather than q4f16; upstream issues #1599 and #1416 cover q4f16 problems on WebGPU.",
+    },
+    browsers: {
+      label: "any, WebGPU optional",
+      tone: "warn",
+      note: "Falls back to WASM without WebGPU. On Safari, 4.2.0 selects an ORT build without WebGPU support; upstream PR #1700 addresses that and is unreleased.",
     },
     models: [
       {
@@ -451,6 +478,11 @@ export const DESCRIPTORS = [
     device: {
       fits: "desktop",
       note: "Desktop. The smallest model offered is 1915 MB.",
+    },
+    browsers: {
+      label: "needs WebGPU",
+      tone: "warn",
+      note: "The GPU backends call for a WebGPU adapter and throw without one. Four WASM builds ship, selected on relaxed-SIMD and JSPI support, so Safari gets an Asyncify build. No threading is used, so no COOP/COEP headers are needed.",
     },
     // One entry. The spike at public/spikes/litert.html carries the loader
     // probes — two 25 MiB random-weight files and two MiniCPM5-1B backends —

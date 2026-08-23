@@ -98,6 +98,13 @@ const AXES = [
     note: (d) => d.progress.note,
   },
   {
+    key: "browsers",
+    label: "Browser support",
+    value: (d) => d.browsers.label,
+    tone: (d) => d.browsers.tone,
+    note: (d) => d.browsers.note,
+  },
+  {
     key: "cancel",
     label: "Cancellation",
     value: (d) => (d.cancel.kind === "abortsignal" ? "AbortSignal" : "library"),
@@ -180,9 +187,15 @@ export const Guidance = ({ descriptor }) => html`
           <dt>
             Device
             <span
-              className=${`axis-value axis-value--${FITS_LABEL[descriptor.device.fits].tone}`}
+              className=${`axis-value axis-value--${
+                descriptor.device.tone ??
+                FITS_LABEL[descriptor.device.fits].tone
+              }`}
             >
-              ${FITS_LABEL[descriptor.device.fits].text}</span
+              ${
+                descriptor.device.label ??
+                FITS_LABEL[descriptor.device.fits].text
+              }</span
             >
           </dt>
           <dd>${descriptor.device.note}</dd>

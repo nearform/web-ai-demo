@@ -2,9 +2,15 @@
 
 // Chrome Prompt API adapter (built-in Gemini Nano).
 //
-// The control case. No download, no model choice, no format — the browser has the
-// model or it does not. Everything the other four spend effort on is simply not
-// our problem here, and in exchange we get no choice about anything.
+// The control case for weights: no download, no model choice, no format — the
+// browser has the model or it does not. What the other four spend effort on
+// (caching, progress, memory) is not a concern here.
+//
+// The trade is availability, and it is the narrowest of the five. Chrome's docs
+// list Windows 10/11, macOS 13+, Linux and Chromebook-Plus ChromeOS, and state
+// that Chrome for Android, iOS and non-Chromebook-Plus ChromeOS are not
+// supported. Every iOS browser is WebKit underneath, so Chrome for iOS does not
+// have it either.
 //
 // Verified against the Chrome docs and the spec rather than remembered:
 //   - LanguageModel.availability(opts) -> "unavailable" | "downloadable"
@@ -35,7 +41,7 @@ export default {
       return {
         ok: false,
         detail:
-          "LanguageModel is undefined — needs Chrome 148+ on a supported OS, and it is unavailable in Web Workers",
+          "LanguageModel is undefined. The web Prompt API needs Chrome 148+ on desktop — Windows 10/11, macOS 13+, Linux, or a Chromebook Plus. Chrome for Android and every iOS browser are unsupported, and it is unavailable in Web Workers.",
       };
     }
 

@@ -40,6 +40,7 @@ import {
   env,
 } from "@huggingface/transformers";
 import { runSpike } from "./lib/harness.js";
+import { trackNow } from "./lib/blackbox.js";
 
 const MAX_NEW_TOKENS = 512;
 
@@ -97,13 +98,28 @@ runSpike({
     // Which ORT artifacts were selected is the whole Safari story, so read it
     // rather than infer it. On Safari, 4.2.0 picks the non-asyncify build here.
     const wasmPaths = env?.backends?.onnx?.wasm?.wasmPaths ?? null;
+    const asyncify =
+      typeof wasmPaths?.wasm === "string"
+        ? wasmPaths.wasm.includes("asyncify")
+        : null;
+
+    // Into the crash snapshot, not just the log. MEASURED WHY, 2026-08-23: an
+    // iPhone run was killed mid-load and the recovered record could not say which
+    // ORT build had been selected — log events die with the tab, only breadcrumbs
+    // and the snapshot survive. Which build ran is the entire Safari story (4.2.0
+    // hands Safari the non-asyncify build, which has no webgpuInit; issue #1604,
+    // PR #1700 merged and unreleased), so it has to be in the part that outlives
+    // the renderer.
+    trackNow({
+      ortAsyncify: asyncify,
+      ortWasmPath: typeof wasmPaths?.wasm === "string" ? wasmPaths.wasm : null,
+      dtype: DTYPE,
+    });
+
     log.info("ORT artifact selection as this browser resolved it", {
       wasmPaths,
       isObject: wasmPaths !== null && typeof wasmPaths === "object",
-      asyncify:
-        typeof wasmPaths?.wasm === "string"
-          ? wasmPaths.wasm.includes("asyncify")
-          : null,
+      asyncify,
       proxy: env?.backends?.onnx?.wasm?.proxy ?? null,
       powerPreference: env?.backends?.onnx?.webgpu?.powerPreference ?? null,
       useWasmCache: env?.useWasmCache ?? null,

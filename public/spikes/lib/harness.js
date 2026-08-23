@@ -60,12 +60,38 @@ const el = (tag, props = {}, children = []) => {
 // distinct3 is the standard diversity metric: unique word trigrams over total.
 // Healthy prose sits high; a repetition loop collapses it. topPhraseRepeat counts
 // the most-repeated 4-gram, which catches a loop that is otherwise wordy.
+// A reply this long that yields almost no words is not prose. Prose runs about
+// 5-6 characters per word, so anything past this threshold should comfortably
+// clear the 12-word floor below; if it does not, the output is non-linguistic.
+const NON_LINGUISTIC_CHARS = 80;
+
 const textQuality = (text) => {
   const words = text.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
-  // Below a dozen words the ratios are noise, so report the count and abstain
-  // rather than emitting a confident-looking number.
+  // Below a dozen words the trigram ratios are noise, so abstain rather than
+  // emitting a confident-looking number — but abstaining unconditionally was a
+  // hole, and a real run fell straight through it. MEASURED 2026-08-23: on an
+  // iPhone, Qwen3.5-0.8B Q2_K_XL emitted **513 characters containing 2 words**,
+  // ran to the full 512-token cap, and was scored `looksDegenerate: null` —
+  // "too short to judge" — when 513 characters resolving to 2 words is itself
+  // the loudest possible signal. Note the word pattern already counts digit runs
+  // as words, so this is not a numbers-only blind spot; whatever that output was,
+  // it was not language.
   if (words.length < 12) {
-    return { words: words.length, distinct3: null, looksDegenerate: null };
+    const nonLinguistic = text.length >= NON_LINGUISTIC_CHARS;
+    return {
+      words: words.length,
+      chars: text.length,
+      charsPerWord:
+        words.length > 0
+          ? Number((text.length / words.length).toFixed(1))
+          : null,
+      distinct3: null,
+      // true when it is long-but-wordless, null when it is genuinely just short.
+      looksDegenerate: nonLinguistic ? true : null,
+      degenerateReason: nonLinguistic
+        ? `${text.length} chars resolved to only ${words.length} word(s) — non-linguistic output`
+        : null,
+    };
   }
   const ngrams = (n) => {
     const counts = new Map();
@@ -87,11 +113,13 @@ const textQuality = (text) => {
   }
   return {
     words: words.length,
+    chars: text.length,
     distinct3,
     topPhraseRepeat,
     // Only worth naming when it is actually repeating.
     topPhrase: topPhraseRepeat >= 3 ? topPhrase : null,
     looksDegenerate: distinct3 < 0.5 || topPhraseRepeat >= 5,
+    degenerateReason: null,
   };
 };
 
@@ -299,7 +327,12 @@ export const runSpike = (spike) => {
       ]),
     );
 
-    trackNow({ phase: "generate", turn, promptChars: prompt.length });
+    trackNow({
+      phase: "generate",
+      turn,
+      promptChars: prompt.length,
+      prompt: prompt.slice(0, 200),
+    });
     crumb(`generate: start turn ${turn}`, { promptChars: prompt.length });
 
     const started = performance.now();
@@ -362,7 +395,19 @@ export const runSpike = (spike) => {
             // Coalesced to one write per 500 ms — see the note in blackbox.js.
             // Untangling "died before the first token" from "died 300 tokens in"
             // is the whole reason this field exists.
-            track({ chunks, replyChars: text.length });
+            //
+            // The TAIL of the reply rides along, because the `transcript` added to
+            // the diagnostics only helps a session that survives to be copied.
+            // MEASURED 2026-08-23: three iPhone crash records came back with
+            // `transcript: []`, since the recovering page has no conversation of
+            // its own — so for a session that dies mid-reply the text has to live
+            // in the crash snapshot or nowhere. Tail rather than head: if the
+            // model is looping, the tail is where the loop is visible.
+            track({
+              chunks,
+              replyChars: text.length,
+              replyTail: text.slice(-240),
+            });
           },
           stats: (s) => {
             runtimeStats = s;
@@ -377,7 +422,9 @@ export const runSpike = (spike) => {
       const run = recordRun(controller.signal.aborted);
       if (run.quality?.looksDegenerate) {
         logger.warn(
-          `Reply looks degenerate: distinct-trigram ratio ${run.quality.distinct3}, most-repeated phrase seen ${run.quality.topPhraseRepeat}x`,
+          run.quality.degenerateReason
+            ? `Reply looks degenerate: ${run.quality.degenerateReason}`
+            : `Reply looks degenerate: distinct-trigram ratio ${run.quality.distinct3}, most-repeated phrase seen ${run.quality.topPhraseRepeat}x`,
           run.quality,
         );
       }
@@ -451,6 +498,17 @@ export const runSpike = (spike) => {
     // crashbox's in-session observations: memory pressure and device-loss events
     // seen while this page has been alive.
     crashboxWarnings: warnings(),
+    // The actual conversation, truncated. This was missing, and its absence cost
+    // us: a reply scored as 513 characters containing 2 words could not be read
+    // back from the paste-out, so what the model actually emitted was
+    // unrecoverable. The article wants to quote degenerate output, not just score
+    // it. Bounded per turn to keep the payload copyable on a phone.
+    transcript: state.messages.map((m) => ({
+      role: m.role,
+      chars: m.content.length,
+      text: m.content.slice(0, 600),
+      truncated: m.content.length > 600,
+    })),
   });
 
   const copyDiagnostics = async () => {

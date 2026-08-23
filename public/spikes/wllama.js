@@ -186,6 +186,26 @@ runSpike({
   load: async ({ model, log, progress }) => {
     const { repo, file } = parseModelId(model);
 
+    // Free the OUTGOING instance before building a new one. This was a real bug,
+    // and it cost a measurement: on 2026-08-23 an iPhone run loaded a 398 MiB model
+    // over an already-resident 218 MiB one and the tab was hard-killed during init.
+    // Reassigning `wllama` drops our reference but frees nothing on its own — the
+    // wasm heap and the GPU buffers belong to the old module, and GC of an
+    // Emscripten instance holding a GPUDevice is neither prompt nor guaranteed. A
+    // 128 GB desktop never notices; a phone dies. exit() is safe to call when
+    // nothing is loaded, so this is unconditional.
+    if (wllama) {
+      try {
+        await wllama.exit();
+        log.info("freed the previously loaded model before loading a new one");
+      } catch (err) {
+        log.warn("exit() on the previous instance threw", {
+          message: String(err),
+        });
+      }
+      wllama = null;
+    }
+
     // A fresh instance every load — see the note on `wllama` above.
     // parallelDownloads lives on the CONSTRUCTOR's second argument, not the load
     // call, which is easy to get wrong from the docs.

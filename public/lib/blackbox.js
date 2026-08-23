@@ -1,8 +1,8 @@
 /* global setTimeout:false, clearTimeout:false */
 
-// crashbox wiring for the spikes.
+// crashbox wiring, shared by the spikes and the unified demo.
 //
-// The spikes exist to find out how five runtimes fail, and the most interesting
+// This project exists to find out how five runtimes fail, and the most interesting
 // failure — an iOS Safari tab dying mid-load — is the one that destroys its own
 // evidence. No JavaScript runs at the moment of a hard kill, so the log panel,
 // the console and the diagnostics JSON all go with the tab. crashbox is Ryan's
@@ -11,11 +11,12 @@
 // clean-shutdown marker on a graceful exit, and on the NEXT load tells you
 // whether the previous session died and what it was doing.
 //
-// This lives in lib/ and is called from the harness, so all five spikes are
-// instrumented by one integration. That is not a violation of the
-// "spikes share no code" rule — that rule is about runtime/provider code, so
-// that a failure belongs to the runtime under test. Crash instrumentation is
-// the same category as the log panel and the device probe: shared apparatus.
+// This lives in lib/ and is called from the spike harness and from the app's
+// session controller, so every page in the project is instrumented by one
+// integration. That is not a violation of the "spikes share no code" rule — that
+// rule is about runtime/provider code, so that a failure belongs to the runtime
+// under test. Crash instrumentation is the same category as the log panel and the
+// device probe: shared apparatus.
 //
 // Three decisions here came out of reading crashbox's source rather than its
 // README, and each of them would be a silent bug otherwise.
@@ -29,17 +30,24 @@ import {
   clearRecovered,
 } from "crashbox";
 
-// DECISION 1: namespace per spike, and it is not optional.
+// DECISION 1: namespace per runtime per surface, and it is not optional.
 //
 // crashbox is single-tab by design. There is exactly one `current` pointer per
 // namespace, and localStorage is shared across the whole origin — so a second
 // tab's init() repoints `current` at its own session and consumes whatever the
-// first tab left there. With five spike pages on one origin that is the normal
-// case, not an edge case: open wllama, then open transformers-js, and wllama's
-// crash record is orphaned before it can be recovered. A namespace per spike
-// gives each page its own pointer.
-const namespaceFor = (spikeName) =>
-  `spike-${spikeName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+// first tab left there. With five spike pages plus the unified demo on one origin
+// that is the normal case, not an edge case: open wllama, then open
+// transformers-js, and wllama's crash record is orphaned before it can be
+// recovered.
+//
+// `scope` separates the surfaces as well as the runtimes. The demo selecting
+// wllama and the wllama spike are different pages that can each die, and a shared
+// namespace would let one consume the other's record — so they get `app-wllama`
+// and `spike-wllama`. Both halves matter: an app crash misattributed to a spike
+// is worse than no record, because the spike is the page whose whole purpose is
+// to be the clean comparison.
+const namespaceFor = (name, scope) =>
+  `${scope}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
 // DECISION 2: snapshots are throttled, because setSnapshot() is a synchronous
 // localStorage write.
@@ -188,7 +196,7 @@ const interceptDevices = (log) => {
 // parked. A genuine kill of an already-frozen tab is suppressed too, which is an
 // accepted trade — the crashes this article is about happen during inference, with
 // the page visible, and that path is untouched.
-const bfcacheKey = (ns) => `spike-bfcache:${ns}`;
+const bfcacheKey = (ns) => `bfcache:${ns}`;
 
 const readParkedSession = (ns) => {
   try {
@@ -231,8 +239,13 @@ const watchBfcache = (ns) => {
  * record arrives synchronously during init, which is why this is called at the
  * top of runSpike rather than after the page is built.
  */
-export const startBlackbox = ({ spikeName, log, onMemoryPressure }) => {
-  const ns = namespaceFor(spikeName);
+export const startBlackbox = ({
+  name,
+  scope = "spike",
+  log,
+  onMemoryPressure,
+}) => {
+  const ns = namespaceFor(name, scope);
   // Read (and consume) the parked id BEFORE init, because init does its inference
   // synchronously and calls onCrashRecovered during the call below.
   const parkedSession = readParkedSession(ns);

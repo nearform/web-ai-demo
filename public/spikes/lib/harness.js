@@ -21,7 +21,7 @@
 // its own prefill/decode token rates should pass them to `ctx.stats()`; those are
 // labelled separately and attributed to the runtime.
 
-import { probeDevice } from "./probe.js";
+import { probeDevice } from "../../lib/probe.js";
 import {
   startBlackbox,
   crumb,
@@ -29,7 +29,10 @@ import {
   trackNow,
   warnings,
   dismissRecovered,
-} from "./blackbox.js";
+} from "../../lib/blackbox.js";
+// The degeneracy metric lives in lib/ so the spikes and the unified demo score
+// output with the identical thresholds — see the note at the top of quality.js.
+import { textQuality, degeneracyReason } from "../../lib/quality.js";
 
 const fmtMs = (ms) =>
   ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${Math.round(ms)}ms`;
@@ -46,81 +49,6 @@ const el = (tag, props = {}, children = []) => {
     .filter(Boolean)
     .forEach((child) => node.append(child));
   return node;
-};
-
-// Degenerate-output detection.
-//
-// A small model that loads fine and then loops — "micro-server-agnostic,
-// micro-server-agnostic, micro-server-agnostic…" — is a different failure from one
-// that crashes, and it is the failure that actually decides whether a model that
-// FITS a device is usable on it. "Gibberish" is not a publishable observation; a
-// ratio is. So this is measured, not eyeballed, and it lives in the harness rather
-// than in a spike so the number means the same thing for all five runtimes.
-//
-// distinct3 is the standard diversity metric: unique word trigrams over total.
-// Healthy prose sits high; a repetition loop collapses it. topPhraseRepeat counts
-// the most-repeated 4-gram, which catches a loop that is otherwise wordy.
-// A reply this long that yields almost no words is not prose. Prose runs about
-// 5-6 characters per word, so anything past this threshold should comfortably
-// clear the 12-word floor below; if it does not, the output is non-linguistic.
-const NON_LINGUISTIC_CHARS = 80;
-
-const textQuality = (text) => {
-  const words = text.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
-  // Below a dozen words the trigram ratios are noise, so abstain rather than
-  // emitting a confident-looking number — but abstaining unconditionally was a
-  // hole, and a real run fell straight through it. MEASURED 2026-08-23: on an
-  // iPhone, Qwen3.5-0.8B Q2_K_XL emitted **513 characters containing 2 words**,
-  // ran to the full 512-token cap, and was scored `looksDegenerate: null` —
-  // "too short to judge" — when 513 characters resolving to 2 words is itself
-  // the loudest possible signal. Note the word pattern already counts digit runs
-  // as words, so this is not a numbers-only blind spot; whatever that output was,
-  // it was not language.
-  if (words.length < 12) {
-    const nonLinguistic = text.length >= NON_LINGUISTIC_CHARS;
-    return {
-      words: words.length,
-      chars: text.length,
-      charsPerWord:
-        words.length > 0
-          ? Number((text.length / words.length).toFixed(1))
-          : null,
-      distinct3: null,
-      // true when it is long-but-wordless, null when it is genuinely just short.
-      looksDegenerate: nonLinguistic ? true : null,
-      degenerateReason: nonLinguistic
-        ? `${text.length} chars resolved to only ${words.length} word(s) — non-linguistic output`
-        : null,
-    };
-  }
-  const ngrams = (n) => {
-    const counts = new Map();
-    for (let i = 0; i + n <= words.length; i += 1) {
-      const key = words.slice(i, i + n).join(" ");
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return counts;
-  };
-  const tri = ngrams(3);
-  const distinct3 = Number((tri.size / (words.length - 2)).toFixed(3));
-  let topPhraseRepeat = 0;
-  let topPhrase = null;
-  for (const [phrase, n] of ngrams(4)) {
-    if (n > topPhraseRepeat) {
-      topPhraseRepeat = n;
-      topPhrase = phrase;
-    }
-  }
-  return {
-    words: words.length,
-    chars: text.length,
-    distinct3,
-    topPhraseRepeat,
-    // Only worth naming when it is actually repeating.
-    topPhrase: topPhraseRepeat >= 3 ? topPhrase : null,
-    looksDegenerate: distinct3 < 0.5 || topPhraseRepeat >= 5,
-    degenerateReason: null,
-  };
 };
 
 const modelOption = (m) =>
@@ -362,7 +290,7 @@ export const runSpike = (spike) => {
         runtimeReportedStats: runtimeStats,
         aborted,
         // Whether the reply is usable prose, as a number rather than an
-        // impression. See textQuality above.
+        // impression. See lib/quality.js.
         quality: textQuality(text),
       };
       // The partial reply is part of the conversation whether we stopped it or
@@ -422,9 +350,7 @@ export const runSpike = (spike) => {
       const run = recordRun(controller.signal.aborted);
       if (run.quality?.looksDegenerate) {
         logger.warn(
-          run.quality.degenerateReason
-            ? `Reply looks degenerate: ${run.quality.degenerateReason}`
-            : `Reply looks degenerate: distinct-trigram ratio ${run.quality.distinct3}, most-repeated phrase seen ${run.quality.topPhraseRepeat}x`,
+          `Reply looks degenerate: ${degeneracyReason(run.quality)}`,
           run.quality,
         );
       }
@@ -662,7 +588,7 @@ export const runSpike = (spike) => {
   // the previous session synchronously inside init(), so `recovered` is already
   // populated when this returns.
   const { recovered, gpuIntercepted } = startBlackbox({
-    spikeName: spike.name,
+    name: spike.name,
     log: logger,
     onMemoryPressure: (info) => {
       // Live pressure, while we are still alive to say so. On Chromium this is

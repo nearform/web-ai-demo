@@ -33,18 +33,54 @@
       href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css"
     />
     <link rel="stylesheet" href="./styles.css" />
+    <!-- Demo-only styles. Kept out of styles.css so the spike pages, which also
+         link it, cannot be restyled by a rule the demo needed. -->
+    <link rel="stylesheet" href="./app.css" />
     <title>Web AI Demo</title>
   </head>
   <body>
     <div id="root"></div>
 
+    <!--
+      All five runtimes plus crashbox in one import map. Declaring a specifier
+      here costs nothing — an import map is a routing table, not a preload — so
+      none of these are fetched until something imports them, and each adapter
+      under app/providers/ is itself behind a dynamic import that only fires when
+      you press Load. That is the whole reason the registry exists: five CDN
+      bundles is tens of megabytes, and a page that downloads them all to render
+      five cards has already failed the thing this demo is about.
+
+      Three of the five specifiers are exact for reasons that are not tidiness:
+
+        - @wllama/wllama must spell out /esm/index.js. package.json says
+          "main": "index.js" and no such file exists at the package root, so the
+          bare specifier 404s. (The README's esm/wasm-from-cdn.js import is not in
+          the published package at all.)
+
+        - @litert-lm/core is PINNED to 0.15.0. dist-tags.latest is 0.16.0, which
+          is an empty publish — one package.json, no dist/, no wasm/ — so Google's
+          own documented URL, /npm/@litert-lm/core/+esm, returns 404. v0.16.1 is
+          tagged on GitHub and never published. Re-checked 2026-08-22; the detail
+          is in app/providers/litert.js. The +esm bundle pulls
+          @litertjs/wasm-utils from jsDelivr by root-relative URL, so this one
+          entry is all that is needed.
+
+        - @huggingface/transformers deliberately has no /+esm suffix: the package
+          root serves the ESM build directly, and jsDelivr's +esm transform breaks
+          its worker and wasm path resolution.
+    -->
     <script type="importmap">
       {
         "imports": {
           "htm": "https://cdn.jsdelivr.net/npm/htm@3.1.1/+esm",
           "react": "https://cdn.jsdelivr.net/npm/react@19.2.8/+esm",
           "react-dom": "https://cdn.jsdelivr.net/npm/react-dom@19.2.8/+esm",
-          "react-dom/client": "https://cdn.jsdelivr.net/npm/react-dom@19.2.8/client/+esm"
+          "react-dom/client": "https://cdn.jsdelivr.net/npm/react-dom@19.2.8/client/+esm",
+          "crashbox": "https://cdn.jsdelivr.net/npm/crashbox@0.1.0/+esm",
+          "@mlc-ai/web-llm": "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.84/+esm",
+          "@wllama/wllama": "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.6.0/esm/index.js",
+          "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0",
+          "@litert-lm/core": "https://cdn.jsdelivr.net/npm/@litert-lm/core@0.15.0/+esm"
         }
       }
     </script>

@@ -122,7 +122,7 @@
     </div>
 
     <script type="module">
-      import { probeDevice } from "./lib/probe.js";
+      import { probeDevice } from "../lib/probe.js";
 
       probeDevice().then((device) => {
         document.getElementById("probe").textContent = JSON.stringify(

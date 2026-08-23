@@ -53,8 +53,11 @@ repo follows it. Sizes below are bytes read off the Hugging Face tree API on
 **web-llm** reads its own catalog at runtime, so the policy is applied as a filter
 rather than a hardcoded list — and the filter **logs what it dropped and why**,
 because the exclusions are themselves the interesting result. It takes the catalog
-from **163 entries to 13**: 163 → 43 on the family and licence rules, then 43 → 13
-by collapsing duplicate encodings. What ships:
+from **163 entries to 13**: 163 → 31 on the family and licence rules, then 31 → 13
+by collapsing 18 duplicate encodings. Re-measured 2026-08-23 against
+`modelVersion: v0_2_84/base`, in both the spike and the unified demo, which agree.
+(An earlier draft of this file said 43 for the intermediate step; that was wrong.)
+What ships:
 
 | Model                        | Declared VRAM | Note                                                                                                                                   |
 | ---------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |

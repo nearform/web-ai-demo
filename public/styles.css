@@ -97,26 +97,6 @@ body {
   text-decoration: none;
 }
 
-.status-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.status-badge--ready {
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
-}
-
-.status-badge--warn {
-  background: rgba(245, 158, 11, 0.1);
-  color: #d97706;
-}
-
 /* Content */
 .content {
   flex: 1;

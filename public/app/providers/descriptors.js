@@ -436,7 +436,7 @@ export const DESCRIPTORS = [
     cancel: {
       kind: "library",
       api: "reader.cancel()",
-      note: "Cancelling the reader also clears the conversation's busy flag. Leaving the read loop without it blocks later turns.",
+      note: "Canceling the reader also clears the conversation's busy flag. Leaving the read loop without it blocks later turns.",
     },
     unload: {
       frees: [

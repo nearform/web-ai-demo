@@ -58,7 +58,7 @@ const DTYPE = "q4";
 // `.onnx_data` files, off the HF tree API on 2026-08-22 — bigger than the q4f16
 // figures quoted in the research, which is the cost of the dtype that works.
 // Note gemma-3-270m is this runtime's own cleanest reference demo and is excluded
-// anyway: licence.
+// anyway: license.
 const MODELS = [
   {
     id: "onnx-community/SmolLM2-135M-Instruct-ONNX",
@@ -248,7 +248,7 @@ runSpike({
       signal?.removeEventListener("abort", onAbort);
       const elapsedS = (performance.now() - startedAt) / 1000;
       // This runtime reports nothing about itself, so every figure here is ours,
-      // counted from the streamer. That asymmetry has to be labelled in the
+      // counted from the streamer. That asymmetry has to be labeled in the
       // comparison table: web-llm and wllama give their own rates, this does not.
       stats({
         tokensCountedByUs: tokenCount,

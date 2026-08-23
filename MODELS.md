@@ -8,7 +8,7 @@ repo follows it. Sizes below are bytes read off the Hugging Face tree API on
 
 1. **Gemma 4 if the runtime can run it.** It is the current good small open model
    and the reason the "can I run today's model" question is interesting.
-2. **No Gemma 3 or earlier.** Licence. This one is not a preference, so it
+2. **No Gemma 3 or earlier.** License. This one is not a preference, so it
    overrides "well, it fits" — a 270 MB Gemma 3 that runs beautifully on a phone
    still does not ship here.
 3. **Latest Qwen with a browser-sized variant.** Today that is **Qwen3.5**
@@ -20,7 +20,7 @@ repo follows it. Sizes below are bytes read off the Hugging Face tree API on
 5. **Language models only — no embedding models.** They load and then cannot
    answer, which reads as a broken demo.
 6. **For any other family: latest generation only.** One entry per class, newest
-   release. No back catalogue.
+   release. No back catalog.
 7. **Multiple sizes of the same model are fine** and in fact wanted — same
    architecture at two sizes is the cleanest way to show where a device gives out.
 8. **Sizes yes, encodings no.** One quantization per model+size. web-llm ships
@@ -53,7 +53,7 @@ repo follows it. Sizes below are bytes read off the Hugging Face tree API on
 **web-llm** reads its own catalog at runtime, so the policy is applied as a filter
 rather than a hardcoded list — and the filter **logs what it dropped and why**,
 because the exclusions are themselves the interesting result. It takes the catalog
-from **163 entries to 13**: 163 → 31 on the family and licence rules, then 31 → 13
+from **163 entries to 13**: 163 → 31 on the family and license rules, then 31 → 13
 by collapsing 18 duplicate encodings. Re-measured 2026-08-23 against
 `modelVersion: v0_2_84/base`, in both the spike and the unified demo, which agree.
 (An earlier draft of this file said 43 for the intermediate step; that was wrong.)
@@ -116,7 +116,7 @@ Three consequences for the picker:
 
 Note rule 2 (no Gemma 3 or earlier) removes what would otherwise look like the
 answer here: the small MediaPipe `-web.task` files at 238 MB and 668 MB are all
-Gemma 3, and they are gated behind a 401 anyway. Licence and policy land on the
+Gemma 3, and they are gated behind a 401 anyway. License and policy land on the
 same files, from two directions.
 
 ## Thinking is off, everywhere

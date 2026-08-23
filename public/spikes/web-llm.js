@@ -99,7 +99,7 @@ const splitId = (id) => {
   return { base: m[1], quant: m[2], context: m[3] ?? null };
 };
 
-// Gemma 3 and earlier are licence-excluded, full stop. Written as "4 or later"
+// Gemma 3 and earlier are license-excluded, full stop. Written as "4 or later"
 // so that the day MLC lands Gemma 4 (open request #810) it is admitted here
 // automatically instead of being silently filtered out by a stale denylist.
 const isGemma4Plus = (id) => /^gemma-?([4-9]|\d\d)/i.test(id);
@@ -111,7 +111,7 @@ const excludeReason = (m) => {
   if (m.model_type === 1) return "embedding model, not a language model";
   if (m.model_type === 2) return "vision-language model";
   if (/^gemma/i.test(id) && !isGemma4Plus(id))
-    return "Gemma 3 or earlier: licence";
+    return "Gemma 3 or earlier: license";
   // Reduced-context reruns of a model we already list.
   if (/-MLC-\d+k$/.test(id)) return "reduced-context duplicate";
   if (LATEST_BY_FAMILY.some((p) => id.startsWith(p))) return null;
@@ -169,7 +169,7 @@ runSpike({
 
     // The exclusions are the interesting part, so they are logged rather than
     // quietly applied. Two of them are findings in their own right: every Gemma
-    // in this catalog is licence-excluded, and there is no Gemma 4 to replace
+    // in this catalog is license-excluded, and there is no Gemma 4 to replace
     // them with.
     const byReason = {};
     for (const d of dropped) (byReason[d.reason] ??= []).push(d.id);
@@ -179,7 +179,7 @@ runSpike({
     );
     if (!kept.some((m) => /^gemma-?[4-9]/i.test(m.model_id))) {
       log.warn(
-        "No Gemma 4 in this catalog — the newest Gemma here is Gemma 3, which the licence rule excludes. See MODELS.md.",
+        "No Gemma 4 in this catalog — the newest Gemma here is Gemma 3, which the license rule excludes. See MODELS.md.",
       );
     }
 
@@ -190,7 +190,7 @@ runSpike({
         id: m.model_id,
         label: m.model_id,
         // vram_required_MB as the library declares it — not a download size, and
-        // not our estimate. Labelled honestly in the picker.
+        // not our estimate. Labeled honestly in the picker.
         sizeMb: m.vram_required_MB ?? null,
       }));
   },

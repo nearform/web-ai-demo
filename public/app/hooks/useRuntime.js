@@ -17,7 +17,7 @@
 //      flushed to state once per animation frame.
 //
 //   3. **An abort is a result, not a failure.** How far a runtime got before you
-//      gave up is data. Some runtimes honour a stop by throwing and some by simply
+//      gave up is data. Some runtimes honor a stop by throwing and some by simply
 //      ending the stream (web-llm's interruptGenerate does the latter), so the
 //      signal decides whether it was a stop — never the control flow.
 //
@@ -695,7 +695,7 @@ export const useRuntime = () => {
         },
       });
 
-      // A runtime may honour an abort by returning early rather than throwing —
+      // A runtime may honor an abort by returning early rather than throwing —
       // web-llm's interruptGenerate() does exactly that — so the signal, not the
       // control flow, decides whether this was a stop.
       const run = recordRun(controller.signal.aborted);

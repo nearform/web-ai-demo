@@ -50,7 +50,7 @@
 //     is meaningless on CPU — read the two timings, not the rate. The controller
 //     suppresses the rate for this reason.
 //   - **`enable_thinking: false` is per-model, not per-runtime.** Gemma 4 E2B
-//     honours it across five turns; MiniCPM5-1B ignores it and emits visible
+//     honors it across five turns; MiniCPM5-1B ignores it and emits visible
 //     `<think>` blocks — as ordinary `content`, with `channels.thought` empty. So
 //     the tidy reasoning channel this runtime offers only helps for models that
 //     populate it.
@@ -272,7 +272,7 @@ export default {
       url,
       webPackaged: isWebPackaged,
       // Stated before the attempt so the log reads as a prediction rather than a
-      // rationalisation.
+      // rationalization.
       path:
         backend === Backend.GPU_ARTISAN
           ? "streaming (ModelAssets.createStreaming) — the path with the two 'not supported yet' errors"
@@ -361,7 +361,7 @@ export default {
       discoveredContext: settingsContext,
       // The controller uses this to suppress its chunks-per-second figure: on
       // CPU the whole reply arrives in one burst at the end, so the rate is an
-      // artefact of the measurement rather than a property of the runtime.
+      // artifact of the measurement rather than a property of the runtime.
       streamsIncrementally: backend === Backend.GPU_ARTISAN,
       backendName,
     };

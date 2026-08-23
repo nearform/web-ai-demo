@@ -19,7 +19,7 @@
 // On honest measurement: the harness counts *chunks* delivered to `onChunk`, not
 // tokens, because a chunk is what we can actually observe. A runtime that reports
 // its own prefill/decode token rates should pass them to `ctx.stats()`; those are
-// labelled separately and attributed to the runtime.
+// labeled separately and attributed to the runtime.
 
 import { probeDevice } from "../../lib/probe.js";
 import {
@@ -344,7 +344,7 @@ export const runSpike = (spike) => {
         }),
       );
 
-      // A runtime may honour an abort by simply returning early rather than
+      // A runtime may honor an abort by simply returning early rather than
       // throwing — web-llm's interruptGenerate() does exactly that — so the
       // signal, not the control flow, decides whether this was a stop.
       const run = recordRun(controller.signal.aborted);
@@ -523,7 +523,7 @@ export const runSpike = (spike) => {
       el("header", { class: "spike-header" }, [
         // "./" not "./index.html": the directory URL is the canonical one in both
         // serve and Pages, so it lands in one hop instead of bouncing through a
-        // rewrite — and avoids the index page having to normalise its own URL.
+        // rewrite — and avoids the index page having to normalize its own URL.
         el("a", { class: "back", href: "./", text: "← all spikes" }),
         el("h1", { text: spike.name }),
         el("a", {

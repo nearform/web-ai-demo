@@ -62,7 +62,7 @@ const N_CTX = 4096;
 const MAX_TOKENS = 512;
 
 // Selected per the repo-wide policy in ../../MODELS.md: Gemma 4 yes, Gemma 3 and
-// earlier never (licence), latest Qwen with a browser-sized variant, at least one
+// earlier never (license), latest Qwen with a browser-sized variant, at least one
 // entry inside the iPhone budget, language models only. Sizes are bytes off the
 // Hugging Face tree API, checked 2026-08-21 — not the arXiv paper's rounded
 // figures and not our estimates.

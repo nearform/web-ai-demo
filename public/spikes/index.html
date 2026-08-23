@@ -12,7 +12,7 @@
       // Fixing it server-side does not work: serve's cleanUrls turn spike pages
       // into extensionless paths, and adding trailingSlash to those makes
       // /spikes/wllama/ the base, which breaks the spike pages' own ./spike.css
-      // and ./wllama.js. So normalise the URL here instead and leave the links
+      // and ./wllama.js. So normalize the URL here instead and leave the links
       // plain relative.
       (function () {
         var p = location.pathname;

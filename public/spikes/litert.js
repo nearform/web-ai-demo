@@ -69,7 +69,7 @@
 //     (total - timeToFirstChunk), which collapses to single-digit milliseconds and
 //     produced a nonsense 39677. Read the two timings, not the rate.
 //   - **`enable_thinking: false` is per-model, not per-runtime.** Gemma 4 E2B
-//     honours it across five turns; MiniCPM5-1B ignores it and emits visible
+//     honors it across five turns; MiniCPM5-1B ignores it and emits visible
 //     `<think>` blocks — as ordinary `content`, with `channels.thought` empty. So
 //     the tidy reasoning channel this runtime offers only helps for models that
 //     populate it.
@@ -106,7 +106,7 @@ const CACHE_NAME = "litertlm-models";
 // **There is no such entry to offer.** Measured 2026-08-21 across a 350-repo
 // union: 38 `-web.litertlm` files exist, 8 distinct builds, and the smallest
 // anywhere is 1052 MiB. Every small MediaPipe `-web.task` (238 MB, 668 MB) is
-// Gemma 3 — excluded on licence, and gated behind a 401 anyway. So the picker is
+// Gemma 3 — excluded on license, and gated behind a 401 anyway. So the picker is
 // honest about being desktop-only, and that emptiness is the finding, not a gap
 // in the list. Sizes are bytes off the HF tree API, re-checked 2026-08-22.
 const MODELS = [
@@ -382,7 +382,7 @@ runSpike({
       url,
       webPackaged: isWebPackaged,
       // The whole of finding #1, stated before the attempt so the log reads as a
-      // prediction rather than a rationalisation.
+      // prediction rather than a rationalization.
       path:
         backend === Backend.GPU_ARTISAN
           ? "streaming (ModelAssets.createStreaming) — the path with the two 'not supported yet' errors"
@@ -544,7 +544,7 @@ runSpike({
 
       stats({
         // The runtime's own rates, not ours. This is the runtime that can settle
-        // whether Joyce's 4-8 tok/s prefill figure was a CPU-backend artefact.
+        // whether Joyce's 4-8 tok/s prefill figure was a CPU-backend artifact.
         prefillTokensPerSecond: bench?.lastPrefillTokensPerSecond ?? null,
         prefillTokenCount: bench?.lastPrefillTokenCount ?? null,
         decodeTokensPerSecond: bench?.lastDecodeTokensPerSecond ?? null,

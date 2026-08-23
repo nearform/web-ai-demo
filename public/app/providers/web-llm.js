@@ -186,7 +186,7 @@ export default {
         id: m.model_id,
         label: m.model_id,
         // vram_required_MB as the library declares it — not a download size, and
-        // not our estimate. Labelled honestly in the picker.
+        // not our estimate. Labeled honestly in the picker.
         sizeMb: m.vram_required_MB ?? null,
       }));
   },

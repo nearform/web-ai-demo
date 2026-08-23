@@ -14,7 +14,7 @@ const tryParse = (text) => {
 };
 
 // Per-turn numbers, as a strip under the reply. Figures the runtime reported and
-// figures this page counted are labelled differently, because they are not the
+// figures this page counted are labeled differently, because they are not the
 // same claim.
 const RunStats = ({ run }) => {
   if (!run) return null;

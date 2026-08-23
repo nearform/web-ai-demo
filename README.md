@@ -130,7 +130,7 @@ degeneracy metric.
 ## Models
 
 Every picker in this repo — the spikes and the unified demo — follows one policy:
-Gemma 4 where the runtime can run it, never Gemma 3 or earlier (licence), the
+Gemma 4 where the runtime can run it, never Gemma 3 or earlier (license), the
 latest Qwen that has a browser-sized variant, at least one model that fits an
 iPhone, and language models only. [MODELS.md](MODELS.md) has the rules, the
 per-runtime selections with byte-exact sizes, and the two GGUF naming traps that
@@ -177,7 +177,7 @@ tries again:
   `/spikes/wllama/`, which moves _their_ base — so `./spike.css` and `./wllama.js`
   both 404 and the page loads unstyled and dead.
 
-So `index.html` normalises its own URL in a small inline script in `<head>`, and
+So `index.html` normalizes its own URL in a small inline script in `<head>`, and
 links point at directories (`./`, `../`) rather than `index.html`, which lands in
 one hop in both environments. If you touch either, check both the index **and** a
 spike page, on `/public/spikes` _and_ `/public/spikes/`.

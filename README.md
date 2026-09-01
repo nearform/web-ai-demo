@@ -30,6 +30,24 @@ npm run dev     # http://localhost:4710/public/
 click. The page reports what each runtime supports as you go, along with a device
 probe, per-turn timings, and a log you can copy.
 
+### Linking to a runtime
+
+The chooser is in the URL, so a selection can be sent to someone:
+
+```
+?runtime=wllama
+?runtime=wllama&model=unsloth%2FQwen3.5-0.8B-GGUF%7CQwen3.5-0.8B-Q4_K_M.gguf
+```
+
+`runtime` is one of `chrome-prompt-api`, `web-llm`, `wllama`, `transformers-js`,
+`litert`; `model` is a model id from that runtime's picker, URL-encoded. Both
+update as you click, so the address bar is always a link to what is on screen.
+
+A link **selects** a runtime and downloads nothing — the model still loads on
+`Ask`, as it does for a click. Anything unrecognised is ignored and reported in
+the log rather than failing. `?model=` for web-llm is held until its catalog is
+read, because that list ships inside the library bundle.
+
 ## Notes
 
 - **Desktop Chrome so far.** Safari and phones are untested.

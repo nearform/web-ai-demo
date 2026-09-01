@@ -39,8 +39,8 @@ import {
 } from "../../lib/blackbox.js";
 import { textQuality, degeneracyReason } from "../../lib/quality.js";
 import { loadAdapter, getDescriptor } from "../providers/index.js";
+import { readDeepLink, writeDeepLink } from "../util/deeplink.js";
 import {
-  DEFAULT_PROVIDER_ID,
   DEFAULT_SYSTEM,
   DEFAULT_PROMPT,
   MAX_REPLY_TOKENS,
@@ -70,7 +70,12 @@ const initialContextFor = (descriptor) =>
     : null;
 
 export const useRuntime = () => {
-  const [providerId, setProviderId] = useState(DEFAULT_PROVIDER_ID);
+  // Read once, lazily, before anything can write to the address bar. Everything
+  // downstream treats this as the initial selection and nothing else — see
+  // util/deeplink.js for why a link must not start a download.
+  const [deepLink] = useState(readDeepLink);
+
+  const [providerId, setProviderId] = useState(deepLink.providerId);
   const descriptor = useMemo(() => getDescriptor(providerId), [providerId]);
 
   // --- render-visible state -------------------------------------------------
@@ -85,7 +90,9 @@ export const useRuntime = () => {
         ? "idle"
         : "none",
   );
-  const [model, setModel] = useState(descriptor?.models?.[0]?.id ?? null);
+  const [model, setModel] = useState(
+    deepLink.model ?? descriptor?.models?.[0]?.id ?? null,
+  );
   const [context, setContext] = useState(() => initialContextFor(descriptor));
   const [replyCap, setReplyCap] = useState(MAX_REPLY_TOKENS);
   const [system, setSystem] = useState(DEFAULT_SYSTEM);
@@ -117,6 +124,11 @@ export const useRuntime = () => {
   // Guards ask-to-load against a double click. abortRef only exists once
   // generation starts, so it cannot cover the load that may precede it.
   const askingRef = useRef(false);
+  // A ?model= that named a runtime whose catalog is inside its own bundle, held
+  // until the catalog is actually read. Cleared once consumed, or when the reader
+  // switches runtime themselves — at which point the link no longer describes
+  // what is on screen.
+  const pendingModelRef = useRef(deepLink.pendingModel);
 
   // --- logging --------------------------------------------------------------
   const log = useCallback((level, message, data) => {
@@ -140,6 +152,31 @@ export const useRuntime = () => {
     }),
     [log],
   );
+
+  // --- deep links -----------------------------------------------------------
+  // What the query string did, or failed to do, said out loud. A reader who was
+  // handed a link and got something else on screen needs to be told why, and the
+  // event log is where this page says things.
+  useEffect(() => {
+    for (const message of deepLink.warnings) log("warn", message);
+    if (deepLink.pendingModel) {
+      log(
+        "info",
+        `?model=${deepLink.pendingModel} is held until the ${descriptor?.name} catalog is read: its model list lives inside the library bundle, and a link does not download one.`,
+      );
+    }
+    // Mount only. These describe the URL as it was on arrival, and the effect
+    // below is about to rewrite it.
+  }, []);
+
+  // The address bar always describes what is on screen, so the URL is a link to
+  // the current selection without anyone having to press anything. Runs on mount
+  // too, which canonicalises the link a reader arrived on: a mistyped model that
+  // was ignored above disappears from the URL rather than staying in it to be
+  // copied on again.
+  useEffect(() => {
+    writeDeepLink({ providerId, model });
+  }, [providerId, model]);
 
   // --- crashbox -------------------------------------------------------------
   // ONE namespace for the whole app, deliberately, and this is a departure from
@@ -259,8 +296,9 @@ export const useRuntime = () => {
   // list (web-llm only) lives inside the library bundle, so asking for it is what
   // pays for the download — hence the explicit state and the logged cost.
   //
-  // Returns the list as well as setting it. Ask-to-load needs the first entry
-  // *now*, and reading `models` back would give the previous render's value.
+  // Returns the id it selected, rather than the list. Ask-to-load needs that id
+  // *now* — reading `model` back would give the previous render's value — and
+  // "the first entry" is no longer the answer once a link can ask for another.
   const discoverModels = useCallback(async () => {
     if (!descriptor || descriptor.modelChoice?.kind !== "discovered") {
       return null;
@@ -270,12 +308,28 @@ export const useRuntime = () => {
       const adapter = await loadAdapter(descriptor.id, { log: logger });
       const list = await adapter.discoverModels({ log: logger });
       setModels(list);
-      setModel(list[0]?.id ?? null);
+
+      // This is the first moment a ?model= for this runtime can be checked
+      // against anything, because the catalog it names arrived with the bundle.
+      const wanted = pendingModelRef.current;
+      pendingModelRef.current = null;
+      const chosen =
+        wanted && list.some((m) => m.id === wanted)
+          ? wanted
+          : (list[0]?.id ?? null);
+      if (wanted && chosen !== wanted) {
+        log(
+          "warn",
+          `?model=${wanted} is not in this catalog; using ${chosen ?? "nothing"} instead.`,
+        );
+      }
+      setModel(chosen);
       setModelsState("ready");
       log("info", `Model catalog loaded: ${list.length} entries`, {
         smallest: list[0] ?? null,
+        selected: chosen,
       });
-      return list;
+      return chosen;
     } catch (err) {
       setModelsState("failed");
       log("error", "discoverModels() failed", describeError(err));
@@ -345,6 +399,10 @@ export const useRuntime = () => {
               ? "idle"
               : "none",
         );
+        // A deep-linked model belongs to the runtime it was linked with. Once the
+        // reader picks a different one themselves, it is stale — and leaving it
+        // set would apply it to a catalog it was never meant for.
+        pendingModelRef.current = null;
         setModel(next?.models?.[0]?.id ?? null);
         setContext(initialContextFor(next));
         setDiscoveredContext(null);
@@ -506,8 +564,7 @@ export const useRuntime = () => {
     let target = model;
     if (!target && descriptor?.modelChoice?.kind === "discovered") {
       log("info", "Reading the model catalog before loading.");
-      const list = await discoverModels();
-      target = list?.[0]?.id ?? null;
+      target = await discoverModels();
       if (!target) return false;
     }
     return doLoad(target);

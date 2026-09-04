@@ -334,6 +334,23 @@ export default {
     }
   },
 
+  // A new chat. The history is the page's here, so the turns are already gone by
+  // the time this runs — what is left is the KV cache, which resetChat() drops.
+  // Worth doing rather than skipping: without it the first turn of the new
+  // conversation is prefilled against a cache built from the old one, and the
+  // prefill rate this page then reports would describe a reuse that the reader
+  // has no reason to expect.
+  resetConversation: async ({ handle, log }) => {
+    await handle?.resetChat?.();
+    // The warning this drives compares a turn's system prompt against the cache
+    // it would have reused. There is no cache now, so the next turn has nothing
+    // to warn about.
+    lastSystem = null;
+    log.info(
+      "engine.resetChat() returned — KV cache dropped, weights untouched",
+    );
+  },
+
   unload: async ({ handle, log }) => {
     // unload() disposes the pipelines and destroys the WebGPU device. The
     // downloaded weights stay cached, and unlike wllama and Transformers.js the

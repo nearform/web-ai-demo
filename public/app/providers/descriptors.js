@@ -67,6 +67,11 @@ export const DESCRIPTORS = [
     history: {
       owner: "runtime",
       note: "The session stores the conversation. Only the new turn is sent.",
+      // Not a detail: on the two runtime-owned ones, clearing the transcript
+      // here would leave the model remembering a conversation the page no
+      // longer shows.
+      reset:
+        "New chat destroys the session and creates a replacement with the same `initialPrompts` — there is no other way to clear it, since `clone()` copies the context.",
     },
     systemPrompt: {
       appliedAt: "load",
@@ -143,6 +148,8 @@ export const DESCRIPTORS = [
     history: {
       owner: "caller",
       note: "Every request carries the whole conversation. The KV cache is reused when the new history extends the previous one.",
+      reset:
+        "New chat drops the transcript and calls `resetChat()`, so the next turn is prefilled against an empty cache.",
     },
     systemPrompt: {
       appliedAt: "turn",
@@ -220,6 +227,8 @@ export const DESCRIPTORS = [
     history: {
       owner: "caller",
       note: "Every request carries the whole conversation. `cache_prompt` asks the runtime to reuse the prefix.",
+      reset:
+        "New chat drops the transcript. The runtime keeps no conversation to clear, and the stale cached prefix simply stops matching.",
     },
     systemPrompt: {
       appliedAt: "turn",
@@ -327,6 +336,8 @@ export const DESCRIPTORS = [
     history: {
       owner: "caller",
       note: "Every request carries the whole conversation. No cache counters are exposed, so prefix reuse cannot be observed.",
+      reset:
+        "New chat drops the transcript. The runtime keeps no conversation to clear.",
     },
     systemPrompt: {
       appliedAt: "turn",
@@ -420,6 +431,8 @@ export const DESCRIPTORS = [
     history: {
       owner: "runtime",
       note: "The Conversation holds the history inside the WASM module. Only the new turn is sent.",
+      reset:
+        "New chat deletes the Conversation and creates a replacement from the same preface. The engine, the weights and the WASM module all stay loaded.",
     },
     systemPrompt: {
       appliedAt: "load",

@@ -816,6 +816,76 @@ export const useRuntime = () => {
     scheduleFlush,
   ]);
 
+  // --- new chat -------------------------------------------------------------
+  // Clearing the transcript is the easy half. The other half is that two of the
+  // five keep the conversation inside the runtime — a Chrome session, a LiteRT-LM
+  // Conversation — so a page that only emptied `turns` would show a blank
+  // conversation to a model that still remembers every word of the last one, and
+  // the next reply would prove it. Those two get `resetConversation()`; the other
+  // three have nothing of their own to clear beyond a cache.
+  //
+  // Deliberately not an unload: the weights stay resident, so this costs nothing
+  // and the next turn starts immediately.
+  const doNewChat = useCallback(async () => {
+    // A turn in flight would land in the cleared transcript: doAsk holds its own
+    // `turn` and appends when generate() returns, with no idea a reset happened
+    // in between. Stop first, then start a new chat.
+    if (askingRef.current) {
+      log("warn", "New chat ignored: a turn is still running. Stop it first.");
+      return;
+    }
+
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    streamRef.current = "";
+    messagesRef.current = [];
+    setTurns([]);
+    setStreaming(null);
+    crumb("new chat");
+
+    if (!handleRef.current) {
+      log("info", "New chat: transcript cleared. Nothing is loaded.");
+      return;
+    }
+
+    try {
+      const adapter = await loadAdapter(providerId, { log: logger });
+      if (!adapter.resetConversation) {
+        log(
+          "info",
+          `New chat: transcript cleared. ${descriptor?.name} holds no history of its own — it is re-sent from here each turn.`,
+        );
+        return;
+      }
+      const next = await adapter.resetConversation({
+        handle: handleRef.current,
+        log: logger,
+      });
+      // An adapter that rebuilds its session returns the replacement. Anything
+      // still pointing at the old one is a use-after-free waiting to happen, so
+      // the swap is here and not inside the adapter.
+      if (next) {
+        handleRef.current = next;
+        if (next.discoveredContext != null) {
+          setDiscoveredContext(next.discoveredContext);
+        }
+      }
+      log("info", `New chat: ${descriptor?.name} conversation reset.`);
+    } catch (err) {
+      // The reset paths tear something down before they build its replacement,
+      // so a failure can leave a handle that no longer works. Unloading is the
+      // honest end state: "not loaded" is true, and Ask will build a new one.
+      log(
+        "error",
+        "New chat failed; unloading so the status on screen is true",
+        describeError(err),
+      );
+      await doUnload({ quiet: true });
+    }
+  }, [providerId, descriptor, logger, log, doUnload]);
+
   const doStop = useCallback(() => {
     if (!abortRef.current) return;
     log("info", "Stop requested; aborting generation");
@@ -935,6 +1005,7 @@ export const useRuntime = () => {
     unload: doUnload,
     ask: doAsk,
     stop: doStop,
+    newChat: doNewChat,
     // model selection
     models,
     modelsState,

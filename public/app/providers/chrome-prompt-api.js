@@ -33,6 +33,19 @@
 let overflowCount = 0;
 let systemAtCreate = null;
 
+// Stage one of overflow is silent eviction, so without this listener the
+// conversation quietly loses its oldest turns and nothing says why. The count is
+// per session, so it resets whenever a session does.
+const watchOverflow = (session, log) => {
+  overflowCount = 0;
+  session.addEventListener?.("contextoverflow", () => {
+    overflowCount += 1;
+    log.warn(
+      `contextoverflow fired (${overflowCount}) — Chrome has evicted the oldest turn pair(s). The system prompt is never evicted.`,
+    );
+  });
+};
+
 export default {
   id: "chrome-prompt-api",
 
@@ -89,15 +102,7 @@ export default {
       },
     });
 
-    // Stage one of overflow is silent eviction, so without this listener the
-    // conversation quietly loses its oldest turns and nothing says why.
-    overflowCount = 0;
-    session.addEventListener?.("contextoverflow", () => {
-      overflowCount += 1;
-      log.warn(
-        `contextoverflow fired (${overflowCount}) — Chrome has evicted the oldest turn pair(s). The system prompt is never evicted.`,
-      );
-    });
+    watchOverflow(session, log);
 
     // THE named finding, and the reason this runtime's context control is
     // read-only rather than absent. There is no documented context-window number
@@ -192,6 +197,38 @@ export default {
         runtimeReportsItsOwnRates: false,
       });
     }
+  },
+
+  // A new chat, for the runtime that owns the history. There is no clear() on a
+  // session and clone() is not one: the Chrome docs are explicit that it forks
+  // the conversation with "the context and initial prompt preserved", so a clone
+  // remembers everything the original did. A fresh session is the only reset.
+  //
+  // Created BEFORE the old one is destroyed, so a create() that fails leaves the
+  // working session in place rather than a dead handle. There is no download to
+  // repeat here — the weights are Chrome's and already resident.
+  resetConversation: async ({ handle, log }) => {
+    const session = await LanguageModel.create({
+      initialPrompts: systemAtCreate
+        ? [{ role: "system", content: systemAtCreate }]
+        : undefined,
+    });
+    watchOverflow(session, log);
+    handle?.session?.destroy?.();
+    log.info(
+      "new session created, previous session destroyed — history and contextUsage are back to zero",
+      {
+        contextWindow: session.contextWindow ?? null,
+        contextUsage: session.contextUsage ?? null,
+        systemPromptReapplied: Boolean(systemAtCreate),
+      },
+    );
+    return {
+      ...handle,
+      session,
+      discoveredContext:
+        session.contextWindow ?? handle?.discoveredContext ?? null,
+    };
   },
 
   unload: async ({ handle, log }) => {

@@ -332,7 +332,10 @@ export default {
     // other three, where it is a per-turn message. A mid-conversation edit does
     // nothing, so we remember what was baked and say so when it changes.
     bakedSystem = system;
-    const conversation = await engine.createConversation({
+    // Kept whole on the handle rather than rebuilt: a new chat re-creates the
+    // conversation from this exact object, so the second conversation cannot
+    // quietly differ from the first.
+    const conversationConfig = {
       // maxOutputTokens is set HERE, not per turn — the only one of the five
       // where the reply cap is a load-time decision.
       sessionConfig: { maxOutputTokens: replyCap },
@@ -347,7 +350,8 @@ export default {
       // Prefill the system prompt at construction rather than on the first turn,
       // so turn 1's time-to-first-token measures turn 1 and not the preface.
       prefillPrefaceOnInit: true,
-    });
+    };
+    const conversation = await engine.createConversation(conversationConfig);
     log.info("conversation created", {
       systemPromptBakedIn: Boolean(system),
       historyOwner:
@@ -358,6 +362,7 @@ export default {
     return {
       engine,
       conversation,
+      conversationConfig,
       discoveredContext: settingsContext,
       // The controller uses this to suppress its chunks-per-second figure: on
       // CPU the whole reply arrives in one burst at the end, so the rate is an
@@ -490,6 +495,35 @@ export default {
         );
       }
     }
+  },
+
+  // A new chat, for the other runtime that owns its history. The Conversation
+  // has no clear(): clone() is documented in conversation.d.ts as independent
+  // "including the history", which means it copies it, so delete-and-recreate is
+  // the reset. The engine, the weights and the WASM module all stay put — only
+  // the KV cache and the turns go.
+  //
+  // Deleted FIRST, unlike Chrome: a second live Conversation would hold a second
+  // KV cache against the same engine, and this is the runtime whose models start
+  // at 1915 MB. The cost of that order is that a failed create leaves no
+  // conversation at all, which the controller handles by unloading.
+  resetConversation: async ({ handle, log }) => {
+    const before = await handle.conversation.getTokenCount().catch(() => null);
+    await handle.conversation.delete();
+    const conversation = await handle.engine.createConversation(
+      handle.conversationConfig,
+    );
+    log.info(
+      "conversation deleted and re-created — history, KV cache and token count reset",
+      {
+        tokenCountBefore: before,
+        tokenCountAfter: await conversation.getTokenCount().catch(() => null),
+        systemPromptReapplied: Boolean(
+          handle.conversationConfig?.preface?.messages,
+        ),
+      },
+    );
+    return { ...handle, conversation };
   },
 
   unload: async ({ handle, log }) => {

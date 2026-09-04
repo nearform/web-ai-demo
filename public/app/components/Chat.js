@@ -154,11 +154,27 @@ export const Chat = ({ rt }) => {
   const busy = rt.generating || status === "loading";
   const canAsk = !busy && rt.prompt.trim().length > 0;
   const loaded = status === "loaded";
+  // Nothing to start over from when the transcript is already empty. Blocked
+  // while a turn is running for a reason the controller enforces too: the reply
+  // in flight would land in the new conversation.
+  const canReset = !busy && (rt.turns.length > 0 || rt.streaming);
 
   return html`
     <section className="panel panel--chat">
-      <div className="panel-title">Conversation</div>
-      <p className="panel-note">${descriptor.history.note}</p>
+      <div className="panel-head">
+        <div className="panel-title">Conversation</div>
+        <button
+          type="button"
+          className="btn btn--small"
+          onClick=${rt.newChat}
+          disabled=${!canReset}
+        >
+          New chat
+        </button>
+      </div>
+      <p className="panel-note">
+        ${descriptor.history.note} ${descriptor.history.reset}
+      </p>
 
       <div className="output">
         ${

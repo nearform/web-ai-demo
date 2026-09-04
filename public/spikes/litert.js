@@ -293,7 +293,6 @@ runSpike({
   notes:
     "Google's on-device runtime, and the newest of the five. The Conversation holds its own history, like Chrome and unlike the other three. No progress callback and no caching at all — both are hand-rolled here. Every model that exists is over a gigabyte, so there is no phone-sized entry to offer.",
   models: MODELS,
-  defaultPrompt: "In one sentence, what is WebGPU?",
 
   check: async ({ log }) => {
     // Which of the four WASM builds is about to load, predicted with the

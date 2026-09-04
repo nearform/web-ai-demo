@@ -123,7 +123,6 @@ runSpike({
   notes:
     "llama.cpp compiled to WASM, WebGPU on by default since 3.1. The only one of the five that loads Hugging Face GGUFs directly, and the only one where the iPhone test could come back positive.",
   models: MODELS,
-  defaultPrompt: "In one sentence, what is WebGPU?",
 
   check: async ({ log }) => {
     // These are the same two probes src/utils.ts uses, and together they predict

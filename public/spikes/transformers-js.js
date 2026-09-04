@@ -92,7 +92,6 @@ runSpike({
   notes:
     "ONNX Runtime Web. Broadest model selection of the five. It can release its session on unload, via an undocumented dispose() — but touching a disposed pipeline poisons every later load in the page.",
   models: MODELS,
-  defaultPrompt: "In one sentence, what is WebGPU?",
 
   check: async ({ log }) => {
     // Which ORT artifacts were selected is the whole Safari story, so read it

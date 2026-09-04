@@ -22,6 +22,7 @@
 // labeled separately and attributed to the runtime.
 
 import { probeDevice } from "../../lib/probe.js";
+import { DEFAULT_SYSTEM, DEFAULT_PROMPT } from "../../lib/defaults.js";
 import {
   startBlackbox,
   crumb,
@@ -479,14 +480,14 @@ export const runSpike = (spike) => {
     nodes.system = el("textarea", {
       class: "control-input control-input--area",
       rows: "3",
-      text: spike.defaultSystem ?? "You are a concise, accurate assistant.",
+      text: spike.defaultSystem ?? DEFAULT_SYSTEM,
     });
 
     nodes.prompt = el("textarea", {
       class: "control-input control-input--area",
       rows: "2",
       placeholder: "Ask something…",
-      text: spike.defaultPrompt ?? "In one sentence, what is WebGPU?",
+      text: spike.defaultPrompt ?? DEFAULT_PROMPT,
     });
 
     nodes.load = el("button", {

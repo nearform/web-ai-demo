@@ -1,9 +1,10 @@
 // The five runtimes, described as data.
 //
-// This file imports nothing. That is deliberate: the chooser renders all five and
-// the guidance panel compares them, and neither should require downloading five
-// library bundles first. Everything knowable without running a runtime lives here;
-// each `providers/<id>.js` imports its library and is fetched only on use.
+// This file imports no runtime library. That is deliberate: the chooser renders all
+// five and the guidance panel compares them, and neither should require downloading
+// five library bundles first. Everything knowable without running a runtime lives
+// here; each `providers/<id>.js` imports its library and is fetched only on use.
+// The one import below is a leaf module of strings, shared with the spikes.
 //
 // RULES FOR THE STRINGS IN THIS FILE. Every `note`, `summary` and `tagline` below
 // is rendered in the page, so:
@@ -30,8 +31,8 @@ export const MAX_REPLY_TOKENS = 512;
 /** Default context budget for the runtimes that accept one. */
 export const DEFAULT_CONTEXT = 4096;
 
-export const DEFAULT_SYSTEM = "You are a concise, accurate assistant.";
-export const DEFAULT_PROMPT = "In one sentence, what is WebGPU?";
+// Shared with the spike harness so both tiers ask the same question.
+export { DEFAULT_SYSTEM, DEFAULT_PROMPT } from "../../lib/defaults.js";
 
 // Two fields, one of them an enum. Small models fail nested schemas, so keeping
 // this flat keeps the comparison about the runtime rather than the model.

@@ -54,7 +54,6 @@ runSpike({
   docs: "https://developer.chrome.com/docs/ai/prompt-api",
   notes:
     "Gemini Nano, built into Chrome. No download in our page and no model choice — and the session keeps its own history, so we do not resend it.",
-  defaultPrompt: "In one sentence, what is WebGPU?",
 
   check: async ({ log }) => {
     if (typeof LanguageModel === "undefined") {

@@ -40,6 +40,7 @@ import {
 import { textQuality, degeneracyReason } from "../../lib/quality.js";
 import { loadAdapter, getDescriptor } from "../providers/index.js";
 import { readDeepLink, writeDeepLink } from "../util/deeplink.js";
+import { jsonSafe } from "../util/wire.js";
 import {
   DEFAULT_SYSTEM,
   DEFAULT_PROMPT,
@@ -642,6 +643,11 @@ export const useRuntime = () => {
     let firstChunkAt = null;
     let chunks = 0;
     let runtimeStats = null;
+    // What the adapter actually sent, and what it actually received. Deliberately
+    // NOT part of the run record: run records go into the log and the diagnostics
+    // copy, and a full resent history per turn would swamp both. This stays on
+    // the turn, in memory, for the panel to read.
+    let wireRecord = null;
 
     // Built in both the completed and the aborted path, so a stopped generation
     // produces the same shape of record as a finished one.
@@ -710,7 +716,23 @@ export const useRuntime = () => {
       const text = streamRef.current;
       setTurns((t) => [
         ...t,
-        { role: "assistant", text, provider: providerId, run, turn },
+        {
+          role: "assistant",
+          text,
+          provider: providerId,
+          run,
+          turn,
+          // `raw` falls back to the displayed text, because four of the five
+          // adapters do not transform their output and so have no second version
+          // of it to report. web-llm does — it strips a leading think block — and
+          // the difference between these two is the only place that is visible.
+          wire: {
+            request: wireRecord?.request ?? null,
+            raw: wireRecord?.raw ?? text,
+            rawReported: wireRecord?.raw != null,
+            note: wireRecord?.note ?? null,
+          },
+        },
       ]);
       setStreaming(null);
       streamRef.current = "";
@@ -755,6 +777,13 @@ export const useRuntime = () => {
         },
         stats: (s) => {
           runtimeStats = s;
+        },
+        // Sanitized and copied on arrival rather than on render: `request` is the
+        // live object an adapter is about to hand its library, and wllama's
+        // carries an AbortSignal. Adapters may call this more than once — the
+        // request before generating, the raw text after — so parts merge.
+        wire: (part) => {
+          wireRecord = { ...(wireRecord ?? {}), ...jsonSafe(part) };
         },
       });
 

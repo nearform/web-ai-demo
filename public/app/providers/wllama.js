@@ -217,6 +217,7 @@ export default {
     replyCap,
     onChunk,
     stats,
+    wire,
     log,
     signal,
   }) => {
@@ -269,6 +270,13 @@ export default {
       };
       log.info("response_format: json_schema (pass-through to llama-server)");
     }
+
+    // `abortSignal` is a live object rather than data, so it shows in the panel
+    // as a marker naming its type. Everything else here is verbatim.
+    wire?.({
+      request,
+      note: "The whole history is resent every turn. Reasoning arrives as ordinary content on this runtime and cannot be filtered, so it is shown as part of the answer.",
+    });
 
     // Deliberately NOT using the onData overload. With onData supplied,
     // createChatCompletion resolves to void — measured, not assumed: the first

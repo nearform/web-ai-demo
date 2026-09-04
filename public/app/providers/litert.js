@@ -379,6 +379,7 @@ export default {
     json,
     onChunk,
     stats,
+    wire,
     log,
     signal,
   }) => {
@@ -397,6 +398,13 @@ export default {
     // Only the new turn goes over the wire. The Conversation holds the history
     // inside the WASM, so the controller's `messages` is deliberately unused —
     // and that divergence is one of the findings.
+    // sendMessageStreaming takes the prompt and nothing else — no options, no
+    // history, no decode settings. That is the whole request.
+    wire?.({
+      request: { prompt },
+      note: "The Conversation holds the history inside the WASM, so only this turn's prompt is sent and the system prompt is baked into the conversation preface. sendMessageStreaming() accepts no options.",
+    });
+
     const stream = handle.conversation.sendMessageStreaming(prompt);
     const reader = stream.getReader();
 

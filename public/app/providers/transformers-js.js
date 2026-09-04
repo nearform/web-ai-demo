@@ -150,6 +150,7 @@ export default {
     replyCap,
     onChunk,
     stats,
+    wire,
     log,
     signal,
   }) => {
@@ -192,6 +193,19 @@ export default {
       token_callback_function: (tokens) => {
         tokenCount += tokens?.length ?? 1;
       },
+    });
+
+    // There is no single request object on this API — the conversation goes to
+    // the pipeline and the decode settings are spread across two arguments — so
+    // this is assembled to match what the call below actually passes.
+    wire?.({
+      request: {
+        conversation,
+        max_new_tokens: replyCap,
+        streamer: { skip_prompt: true, skip_special_tokens: true },
+        stopping_criteria: "InterruptableStoppingCriteria",
+      },
+      note: "The whole history is resent every turn. The streamer has skip_special_tokens: true, so template and control tokens never reach this page — `raw` is the text as the streamer delivers it, not the model's full token stream.",
     });
 
     const startedAt = performance.now();

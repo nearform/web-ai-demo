@@ -252,6 +252,7 @@ export default {
     replyCap,
     onChunk,
     stats,
+    wire,
     log,
     signal,
   }) => {
@@ -304,12 +305,26 @@ export default {
       log.info("response_format: json_object");
     }
 
+    // Reported before the call, so a turn that throws still shows what was sent.
+    wire?.({
+      request,
+      note: "The whole history is resent every turn. A leading <think> block is stripped from the visible answer; `raw` below is what the model emitted.",
+    });
+
     const chunks = await handle.chat.completions.create(request);
+
+    // The stream before makeThinkStripper touches it. This is the only adapter
+    // here that removes text from its own output, so it is the only one that has
+    // something to report that the conversation panel does not already show.
+    let raw = "";
 
     try {
       for await (const chunk of chunks) {
         const delta = chunk.choices?.[0]?.delta?.content;
-        if (delta) emit(delta);
+        if (delta) {
+          raw += delta;
+          emit(delta);
+        }
         // Usage arrives only in the final chunk, and only because
         // stream_options.include_usage asked for it.
         if (chunk.usage) {
@@ -331,6 +346,10 @@ export default {
       }
     } finally {
       signal?.removeEventListener("abort", onAbort);
+      // In the finally so that a stopped or failed turn still reports what had
+      // arrived — a reply swallowed whole by an unclosed think block is exactly
+      // the case where the raw text is the only evidence of what happened.
+      wire?.({ raw });
     }
   },
 

@@ -136,6 +136,7 @@ export default {
     json,
     onChunk,
     stats,
+    wire,
     log,
     signal,
   }) => {
@@ -171,6 +172,13 @@ export default {
       options.responseConstraint = json.schema;
       log.info("responseConstraint set", { schema: json.schema });
     }
+    // Only this turn's prompt goes over. The absence of a history here is the
+    // finding, so the panel reports what was sent rather than implying more was.
+    wire?.({
+      request: { prompt, options },
+      note: "The session owns the history: only this turn's prompt is sent, and the system prompt was fixed at create(). Nothing is resent.",
+    });
+
     const stream = session.promptStreaming(prompt, options);
 
     try {

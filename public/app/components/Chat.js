@@ -1,4 +1,8 @@
+/* global navigator:false */
+
+import { useEffect, useRef, useState } from "react";
 import { html } from "../util/html.js";
+import { formatWire } from "../util/wire.js";
 
 // Whether the reply parses as JSON. Three of the five constrain the grammar; on
 // the other two the schema is only a request in the prompt. Showing the parse
@@ -92,7 +96,98 @@ const RunStats = ({ run }) => {
   `;
 };
 
-const Turn = ({ turn, descriptor }) => {
+// What was sent and what came back, verbatim.
+//
+// The conversation panel shows a *processed* reply: web-llm's leading think block
+// is stripped before display, and every runtime resends (or does not resend) a
+// history the reader never sees. Both of those are the subject of the demo rather
+// than an implementation detail, so there is one place to read the unedited pair.
+//
+// A native <dialog> rather than a hand-rolled overlay: showModal() brings the
+// focus trap, the Escape key and the inert backdrop with it, none of which are
+// worth reimplementing.
+const WireModal = ({ wire, descriptor, turn, shownChars, onClose }) => {
+  const ref = useRef(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return undefined;
+    node.showModal();
+    // Escape closes a <dialog> without going through the close button, so the
+    // parent's "which turn is open" state has to follow the element, not the
+    // other way round.
+    const onCancel = () => onClose();
+    node.addEventListener("close", onCancel);
+    return () => node.removeEventListener("close", onCancel);
+  }, [onClose]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        formatWire({ provider: descriptor.id, turn, ...wire }),
+      );
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const stripped = wire.rawReported ? wire.raw.length - shownChars : 0;
+
+  return html`
+    <dialog className="wire" ref=${ref}>
+      <div className="wire-head">
+        <div className="wire-title">
+          Turn ${turn} — ${descriptor.name}, verbatim
+        </div>
+        <button
+          type="button"
+          className="btn btn--small"
+          onClick=${onClose}
+          aria-label="Close"
+        >
+          Close
+        </button>
+      </div>
+
+      ${wire.note ? html`<p className="wire-note">${wire.note}</p>` : null}
+
+      <div className="wire-section">
+        <div className="wire-label">Sent to the runtime</div>
+        ${
+          wire.request === null
+            ? html`<p className="wire-empty">
+                This adapter reported no request.
+              </p>`
+            : html`<pre className="wire-body">${formatWire(wire.request)}</pre>`
+        }
+      </div>
+
+      <div className="wire-section">
+        <div className="wire-label">
+          Received
+          ${
+            stripped > 0
+              ? html`<span className="turn-flag"
+                  >${stripped} chars stripped before display</span
+                >`
+              : null
+          }
+        </div>
+        <pre className="wire-body">${wire.raw || "(nothing)"}</pre>
+      </div>
+
+      <div className="btn-row">
+        <button type="button" className="btn" onClick=${copy}>
+          ${copied ? "Copied" : "Copy both"}
+        </button>
+      </div>
+    </dialog>
+  `;
+};
+
+const Turn = ({ turn, descriptor, onShowWire }) => {
   if (turn.role === "user") {
     return html`
       <div className="turn turn--user">
@@ -141,12 +236,41 @@ const Turn = ({ turn, descriptor }) => {
           : null
       }
       <${RunStats} run=${turn.run} />
+      ${
+        turn.wire
+          ? html`
+              <button
+                type="button"
+                className="wire-open"
+                onClick=${onShowWire}
+                title="Show what was sent and what came back, verbatim"
+                aria-label=${`Show the verbatim request and reply for turn ${turn.turn}`}
+              >
+                <span aria-hidden="true">⇅</span> verbatim
+                ${
+                  turn.wire.rawReported &&
+                  turn.wire.raw.length !== turn.text.length
+                    ? html`<span className="turn-flag"
+                        >${turn.wire.raw.length - turn.text.length}
+                        stripped</span
+                      >`
+                    : null
+                }
+              </button>
+            `
+          : null
+      }
     </div>
   `;
 };
 
 export const Chat = ({ rt }) => {
   const { descriptor, status } = rt;
+  // Index into rt.turns rather than the turn object: a new chat replaces the
+  // array, and an index that no longer exists closes the modal by itself instead
+  // of holding a stale payload open.
+  const [wireIndex, setWireIndex] = useState(null);
+  const wireTurn = wireIndex === null ? null : (rt.turns[wireIndex] ?? null);
   // Ask loads on demand, so it stays available when nothing is loaded — the only
   // things that block it are a load already in flight and a reply already
   // streaming. An "unavailable" or "error" status does NOT block it: pressing Ask
@@ -186,7 +310,12 @@ export const Chat = ({ rt }) => {
         }
         ${rt.turns.map(
           (t, i) =>
-            html`<${Turn} key=${i} turn=${t} descriptor=${descriptor} />`,
+            html`<${Turn}
+              key=${i}
+              turn=${t}
+              descriptor=${descriptor}
+              onShowWire=${() => setWireIndex(i)}
+            />`,
         )}
         ${
           rt.streaming
@@ -222,6 +351,18 @@ export const Chat = ({ rt }) => {
           }}
         ></textarea>
       </label>
+
+      ${
+        wireTurn?.wire
+          ? html`<${WireModal}
+              wire=${wireTurn.wire}
+              descriptor=${descriptor}
+              turn=${wireTurn.turn}
+              shownChars=${wireTurn.text.length}
+              onClose=${() => setWireIndex(null)}
+            />`
+          : null
+      }
 
       <div className="btn-row">
         <button

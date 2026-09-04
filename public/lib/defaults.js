@@ -18,4 +18,4 @@ export const DEFAULT_SYSTEM = "You are a concise, accurate assistant.";
  * short: a 0.5B model has read the answer many times, and "in one sentence" keeps
  * the reply brief enough that a single-threaded WASM runtime still finishes it.
  */
-export const DEFAULT_PROMPT = "In one sentence, how do I exit vim?";
+export const DEFAULT_PROMPT = "In one sentence, what is bikeshedding?";

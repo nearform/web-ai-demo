@@ -429,146 +429,152 @@ export const useRuntime = () => {
   );
 
   // --- load -----------------------------------------------------------------
-  // `modelOverride` exists for ask-to-load: when Ask has just discovered a
-  // catalog, the model it wants is not in state yet. Returns true only if the
-  // runtime is actually loaded afterwards, so a caller can chain on it.
-  const doLoad = useCallback(
-    async (modelOverride) => {
-      const targetModel = modelOverride ?? model;
-      applyStatus("loading");
-      reportProgress(0, "starting");
-      // The model is the thing most likely to kill the tab, so it goes into the
-      // snapshot before the attempt rather than after it.
-      trackNow({
-        phase: "load",
-        provider: providerId,
-        model: targetModel,
-        context,
-        replyCap,
-      });
-      crumb("load: start", { provider: providerId, model: targetModel });
-      const started = performance.now();
-
-      try {
-        const adapter = await loadAdapter(providerId, { log: logger });
-
-        // check() first. A runtime that reports itself unavailable here is a
-        // result, not an error — "this browser cannot do this at all" is one of the
-        // five things the demo exists to show.
-        if (adapter.check) {
-          let ok = false;
-          let result = null;
-          try {
-            result = await adapter.check({ log: logger });
-            ok = result?.ok ?? Boolean(result);
-          } catch (err) {
-            log("error", "check() threw", describeError(err));
-            ok = false;
-          }
-          log(
-            ok ? "info" : "warn",
-            ok
-              ? "check() passed"
-              : "check() says this runtime is unavailable here",
-            result?.detail ?? result,
-          );
-          if (!ok) {
-            applyStatus(
-              "unavailable",
-              typeof result?.detail === "string" ? result.detail : undefined,
-            );
-            reportProgress(null);
-            return false;
-          }
-        }
-
-        const handle = await adapter.load({
-          model: targetModel,
-          system,
-          context,
-          replyCap,
-          log: logger,
-          progress: reportProgress,
-        });
-        handleRef.current = handle;
-
-        // Several runtimes can only tell you their real context budget after
-        // loading — Chrome because it is per-device, wllama and LiteRT-LM because
-        // the requested value may have been clamped. Surfaced so the control can
-        // show what actually happened rather than what we asked for.
-        if (handle?.discoveredContext) {
-          setDiscoveredContext(handle.discoveredContext);
-        }
-
-        const elapsed = performance.now() - started;
-        runsRef.current = [
-          ...runsRef.current,
-          {
-            kind: "load",
-            provider: providerId,
-            model: targetModel,
-            ms: Math.round(elapsed),
-          },
-        ];
-        setRuns(runsRef.current);
-        log("info", `load() finished in ${fmtMs(elapsed)}`);
-        crumb("load: ok", { ms: Math.round(elapsed) });
-        // Back to idle, or a recovered record reads as "died during load" for the
-        // whole time the page then sat there loaded and doing nothing.
-        trackNow({ phase: "idle", progress: null, progressText: null });
-        reportProgress(null);
-        applyStatus("loaded");
-        return true;
-      } catch (err) {
-        const described = describeError(err);
-        log(
-          "error",
-          `load() failed after ${fmtMs(performance.now() - started)}`,
-          described,
-        );
-        // A load that throws is a survivable failure, so it lands in the log. It
-        // still gets a breadcrumb, because the next thing that happens might not be.
-        crumb("load: failed", {
-          name: described.name,
-          message: described.message,
-        });
-        handleRef.current = null;
-        reportProgress(null);
-        applyStatus("error", described.message);
-        return false;
-      }
-    },
-    [
-      providerId,
-      model,
-      system,
+  // Returns true only if the runtime is actually loaded afterwards, so a caller
+  // can chain on it.
+  //
+  // Resolving the model happens here rather than in the callers because for a
+  // runtime whose catalog ships inside its own bundle there is no model selected
+  // until that catalog is read — `model` is null on a fresh
+  // `?runtime=web-llm`, and web-llm answers a null id with "Cannot find model
+  // record in appConfig for null". Discovery already picks a default (smallest
+  // first); it just has to be reached from every path that loads, not only Ask.
+  const doLoad = useCallback(async () => {
+    let targetModel = model;
+    if (!targetModel && descriptor?.modelChoice?.kind === "discovered") {
+      log("info", "Reading the model catalog before loading.");
+      // Before applyStatus("loading"): discovery reports itself through
+      // modelsState, and a failure here should leave the runtime not_loaded
+      // rather than stuck at loading.
+      targetModel = await discoverModels();
+      if (!targetModel) return false;
+    }
+    applyStatus("loading");
+    reportProgress(0, "starting");
+    // The model is the thing most likely to kill the tab, so it goes into the
+    // snapshot before the attempt rather than after it.
+    trackNow({
+      phase: "load",
+      provider: providerId,
+      model: targetModel,
       context,
       replyCap,
-      logger,
-      log,
-      applyStatus,
-      reportProgress,
-    ],
-  );
+    });
+    crumb("load: start", { provider: providerId, model: targetModel });
+    const started = performance.now();
+
+    try {
+      const adapter = await loadAdapter(providerId, { log: logger });
+
+      // check() first. A runtime that reports itself unavailable here is a
+      // result, not an error — "this browser cannot do this at all" is one of the
+      // five things the demo exists to show.
+      if (adapter.check) {
+        let ok = false;
+        let result = null;
+        try {
+          result = await adapter.check({ log: logger });
+          ok = result?.ok ?? Boolean(result);
+        } catch (err) {
+          log("error", "check() threw", describeError(err));
+          ok = false;
+        }
+        log(
+          ok ? "info" : "warn",
+          ok
+            ? "check() passed"
+            : "check() says this runtime is unavailable here",
+          result?.detail ?? result,
+        );
+        if (!ok) {
+          applyStatus(
+            "unavailable",
+            typeof result?.detail === "string" ? result.detail : undefined,
+          );
+          reportProgress(null);
+          return false;
+        }
+      }
+
+      const handle = await adapter.load({
+        model: targetModel,
+        system,
+        context,
+        replyCap,
+        log: logger,
+        progress: reportProgress,
+      });
+      handleRef.current = handle;
+
+      // Several runtimes can only tell you their real context budget after
+      // loading — Chrome because it is per-device, wllama and LiteRT-LM because
+      // the requested value may have been clamped. Surfaced so the control can
+      // show what actually happened rather than what we asked for.
+      if (handle?.discoveredContext) {
+        setDiscoveredContext(handle.discoveredContext);
+      }
+
+      const elapsed = performance.now() - started;
+      runsRef.current = [
+        ...runsRef.current,
+        {
+          kind: "load",
+          provider: providerId,
+          model: targetModel,
+          ms: Math.round(elapsed),
+        },
+      ];
+      setRuns(runsRef.current);
+      log("info", `load() finished in ${fmtMs(elapsed)}`);
+      crumb("load: ok", { ms: Math.round(elapsed) });
+      // Back to idle, or a recovered record reads as "died during load" for the
+      // whole time the page then sat there loaded and doing nothing.
+      trackNow({ phase: "idle", progress: null, progressText: null });
+      reportProgress(null);
+      applyStatus("loaded");
+      return true;
+    } catch (err) {
+      const described = describeError(err);
+      log(
+        "error",
+        `load() failed after ${fmtMs(performance.now() - started)}`,
+        described,
+      );
+      // A load that throws is a survivable failure, so it lands in the log. It
+      // still gets a breadcrumb, because the next thing that happens might not be.
+      crumb("load: failed", {
+        name: described.name,
+        message: described.message,
+      });
+      handleRef.current = null;
+      reportProgress(null);
+      applyStatus("error", described.message);
+      return false;
+    }
+  }, [
+    providerId,
+    model,
+    descriptor,
+    discoverModels,
+    system,
+    context,
+    replyCap,
+    logger,
+    log,
+    applyStatus,
+    reportProgress,
+  ]);
 
   // Load whatever this runtime needs in order to answer, if it is not loaded
-  // already: discover a catalog first where the model list lives inside the
-  // library, then load the default (smallest-first) model.
+  // already. doLoad handles reading a catalog where the model list lives inside
+  // the library, so this is only the already-loaded short circuit.
   //
   // Keyed off handleRef rather than `status` deliberately — this runs inside an
   // async chain, and `status` closed over from the render that started it goes
   // stale the moment doLoad flips it. The ref is always current.
   const ensureLoaded = useCallback(async () => {
     if (handleRef.current) return true;
-
-    let target = model;
-    if (!target && descriptor?.modelChoice?.kind === "discovered") {
-      log("info", "Reading the model catalog before loading.");
-      target = await discoverModels();
-      if (!target) return false;
-    }
-    return doLoad(target);
-  }, [model, descriptor, discoverModels, doLoad, log]);
+    return doLoad();
+  }, [doLoad]);
 
   // --- streaming flush ------------------------------------------------------
   // See note 2 at the top of the file. Chunks land in a ref; this pushes the

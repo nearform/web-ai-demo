@@ -855,7 +855,8 @@
 
 /* A <details> opening a panel carries the heading itself, so it should not also
    carry the separator that divides one disclosure from the next. */
-.panel > details:first-child {
+.panel > details:first-child,
+.panel > .panel-title + details {
   margin-top: 0;
   border-top: none;
   padding-top: 0;

@@ -162,6 +162,7 @@ const ComparisonTable = ({ activeId }) => {
 
 export const Guidance = ({ descriptor }) => html`
   <section className="panel panel--guidance">
+    <div className="panel-title">Capabilities</div>
     <details className="detail-block">
       <summary>What ${descriptor.name} will and won't do</summary>
       <p className="panel-note">

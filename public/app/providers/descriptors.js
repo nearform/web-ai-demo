@@ -238,7 +238,17 @@ export const DESCRIPTORS = [
     modelChoice: {
       kind: "static",
       // Both of these sort above the model itself when ordering by size.
-      note: "A fixed list of GGUF files. When adding to it, note that `mtp-*` files are draft heads and `mmproj-*` are vision projectors rather than models.",
+      note: "A fixed list of GGUF files, plus any repo you name yourself. When adding to the list, note that `mtp-*` files are draft heads and `mmproj-*` are vision projectors rather than models.",
+    },
+    // The only runtime here that will load a model nobody vetted: a GGUF is a
+    // GGUF, so the picker does not have to be a catalog. web-llm needs its
+    // weights compiled to its own format and LiteRT-LM refuses community
+    // packaging outright, so neither can offer this.
+    customModel: {
+      kind: "hf-gguf",
+      label: "Or a Hugging Face repo",
+      placeholder: "unsloth/Qwen3.5-4B-GGUF:Q4_K_M",
+      note: "`owner/repo:QUANT` as llama.cpp's `-hf` takes it, `owner/repo|file.gguf`, a Hub URL, or a bare `owner/repo` to let wllama choose the quant. Nothing checks whether it fits this device first.",
     },
     context: {
       control: "load",

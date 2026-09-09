@@ -5,7 +5,7 @@
 // Verified against the 3.6.0 tarball source and its published types rather than
 // remembered:
 //   - new Wllama(pathConfig, wllamaConfig)  — pathConfig key is "default"
-//   - loadModelFromHF({ repo, file }, { n_ctx, progressCallback })
+//   - loadModelFromHF({ repo, file | quant }, { n_ctx, progressCallback })
 //   - createChatCompletion({ messages, stream, onData, cache_prompt, ... })
 //   - response_format: { type: 'json_schema', json_schema: { name, schema } }
 //   - chunk.choices[0].delta.content        — OpenAI-shaped
@@ -32,6 +32,7 @@
 // published package at all.
 
 import { Wllama } from "@wllama/wllama";
+import { ggufLoadParams } from "../util/hf-gguf.js";
 
 const WLLAMA_VERSION = "3.6.0";
 const WASM_URL = `https://cdn.jsdelivr.net/npm/@wllama/wllama@${WLLAMA_VERSION}/src/wasm/wllama.wasm`;
@@ -41,11 +42,6 @@ const WASM_URL = `https://cdn.jsdelivr.net/npm/@wllama/wllama@${WLLAMA_VERSION}/
 // 'Module is already initialized'.
 let wllama = null;
 let lastSystem = null;
-
-const parseModelId = (id) => {
-  const [repo, file] = id.split("|");
-  return { repo, file };
-};
 
 export default {
   id: "wllama",
@@ -109,7 +105,9 @@ export default {
   },
 
   load: async ({ model, context, log, progress }) => {
-    const { repo, file } = parseModelId(model);
+    // An id is either `repo|file.gguf` or `repo:QUANT` — see util/hf-gguf.js for
+    // why both, and why the parser is not in this file.
+    const hf = ggufLoadParams(model);
 
     // Free the OUTGOING instance before building a new one. This was a real bug,
     // and it cost a measurement: on 2026-08-23 an iPhone run loaded a 398 MiB model
@@ -150,28 +148,25 @@ export default {
       log.warn("modelManager.getModels() failed", { message: String(err) });
     }
 
-    log.info(`loadModelFromHF({ repo: "${repo}", file: "${file}" })`, {
+    log.info(`loadModelFromHF(${JSON.stringify(hf)})`, {
       n_ctx: context,
     });
 
-    await wllama.loadModelFromHF(
-      { repo, file },
-      {
-        // Trap 3. Must be explicit, and the UI control is why it is a variable
-        // here rather than a constant: on a phone the KV cache is often what
-        // exhausts memory before the weights do.
-        n_ctx: context,
-        // n_threads deliberately omitted — see trap 4.
-        progressCallback: ({ loaded, total }) => {
-          if (total) {
-            progress(
-              loaded / total,
-              `${Math.round(loaded / 1048576)} / ${Math.round(total / 1048576)} MB`,
-            );
-          }
-        },
+    await wllama.loadModelFromHF(hf, {
+      // Trap 3. Must be explicit, and the UI control is why it is a variable
+      // here rather than a constant: on a phone the KV cache is often what
+      // exhausts memory before the weights do.
+      n_ctx: context,
+      // n_threads deliberately omitted — see trap 4.
+      progressCallback: ({ loaded, total }) => {
+        if (total) {
+          progress(
+            loaded / total,
+            `${Math.round(loaded / 1048576)} / ${Math.round(total / 1048576)} MB`,
+          );
+        }
       },
-    );
+    });
 
     // Everything here is a claim the article might make, answered by the runtime
     // itself rather than by us: which build ran, whether threads happened,

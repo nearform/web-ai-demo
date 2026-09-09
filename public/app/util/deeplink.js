@@ -28,6 +28,7 @@ import {
   byId,
   DEFAULT_PROVIDER_ID,
 } from "../providers/descriptors.js";
+import { parseGgufSpec } from "./hf-gguf.js";
 
 export const RUNTIME_PARAM = "runtime";
 export const MODEL_PARAM = "model";
@@ -41,6 +42,8 @@ const currentParams = () => new URLSearchParams(window.location.search);
  * Returns `{ providerId, model, pendingModel, warnings }`:
  *   - `providerId` is always a real id.
  *   - `model` is a validated id, or null to mean "use this runtime's default".
+ *     For a runtime with a `customModel` (wllama), an id outside its list is
+ *     accepted if it parses as a specifier — the list is not a closed set there.
  *   - `pendingModel` is a model id that could NOT be validated yet because the
  *     runtime's catalog lives inside its library bundle (web-llm). Holding it
  *     rather than resolving it is what keeps rule 1 above true: validating it
@@ -80,6 +83,20 @@ export const readDeepLink = () => {
     } else if (descriptor.models) {
       if (descriptor.models.some((m) => m.id === requestedModel)) {
         model = requestedModel;
+      } else if (descriptor.customModel) {
+        // A runtime that takes an arbitrary repo has no closed set to validate
+        // against, so "not in the list" is not an error here — it is the feature.
+        // Only the shape of the specifier can be checked, and a link is the most
+        // likely place for a mangled one to arrive: the ids carry pipes and
+        // colons, which is exactly what a chat client mauls.
+        const spec = parseGgufSpec(requestedModel);
+        if (spec.ok) {
+          model = spec.id;
+        } else {
+          warnings.push(
+            `Ignoring ?${MODEL_PARAM}=${requestedModel}: ${spec.error} Falling back to the first entry.`,
+          );
+        }
       } else {
         warnings.push(
           `Ignoring ?${MODEL_PARAM}=${requestedModel}: not one of ${descriptor.name}'s models. Falling back to the first entry.`,

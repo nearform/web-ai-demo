@@ -50,6 +50,22 @@ repo follows it. Sizes below are bytes read off the Hugging Face tree API on
 | Qwen3.5-4B   | `Qwen3.5-4B-Q4_K_M.gguf`       | 2613 MiB | Desktop, and the >2 GiB single-file test          |
 | Gemma 4 E2B  | `gemma-4-E2B-it-Q4_0.gguf`     | 2709 MiB | Rule 1. Desktop only, and expected to be marginal |
 
+wllama also takes a repo **you** name, in the field under the picker: the policy
+above governs the curated list, not what the runtime will accept. A GGUF is a
+GGUF, so there is no vetted-catalog reason to refuse one — `owner/repo:QUANT` as
+llama.cpp's `-hf` takes it, `owner/repo|file.gguf`, a Hub URL, or a bare
+`owner/repo` to let wllama pick the quant. wllama 3.6.0 resolves a quant itself
+(`loadModelFromHF` accepts `{ repo, quant }`), including rewriting a shard hit to
+`-00001-of-0000N`, so nothing here reimplements that. Such an entry joins the
+picker and the `?model=` link like any other, and carries no size, because this
+page has not asked the Hub for one and an invented number beside a measured one
+would be worse than a blank.
+
+The two traps below are why that field warns rather than just accepting: a name
+matching `mtp`, `dflash`, `eagle`, `draft`, `mmproj` or `imatrix` is called out in
+the log before the download starts. It is advice, not a refusal — pointing a
+runtime at one to see what it does is a legitimate thing to want from this page.
+
 **web-llm** reads its own catalog at runtime, so the policy is applied as a filter
 rather than a hardcoded list — and the filter **logs what it dropped and why**,
 because the exclusions are themselves the interesting result. It takes the catalog
@@ -146,6 +162,17 @@ that cannot work:
   `unsloth/gemma-4-E2B-it-GGUF` they are 56–93 MiB, so sorting by size puts them
   first and they look like a wonderfully small Gemma 4.
 - **`mmproj-*` files are vision projectors**, same story, 531–941 MiB.
+- **Speculative draft heads are published as standalone repos**, which is the
+  same trap without the filename prefix to give it away, and they declare
+  `pipeline_tag: text-generation` so a pipeline filter does not catch them.
+  `LiquidAI/LFM2.5-8B-A1B-DSpark-GGUF` is 340 MiB at Q8_0 next to an 8B target;
+  its own card calls it a "draft sidecar" that takes the token embeddings and LM
+  head from the target at load, so it cannot run alone even in principle.
+  `Alittlehammmer/Qwen3.6-35B-A3B-DFlash-GGUF-llama.cpp` is 421 MB at Q8_0 and
+  reads like a browser-sized Qwen3.6; it is the DFlash draft head, and its own
+  README pairs it with the real 35B via llama.cpp's `model-draft` and
+  `spec-type = draft-dflash`. There is no draft slot in any runtime here, so it
+  would download and then answer with nothing. Not offered for that reason.
 
 Sort by size to find the small end, then exclude `mtp`, `mmproj`, `imatrix`,
 `draft`, and `-0000N-of-0000M` shard members before believing the answer.

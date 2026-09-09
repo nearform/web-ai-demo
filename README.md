@@ -43,6 +43,12 @@ The chooser is in the URL, so a selection can be sent to someone:
 `litert`; `model` is a model id from that runtime's picker, URL-encoded. Both
 update as you click, so the address bar is always a link to what is on screen.
 
+For wllama, `model` need not be one of the listed ids — it takes any Hugging Face
+GGUF specifier, which is also what the field under its picker accepts:
+`owner/repo:Q4_K_M` in llama.cpp's `-hf` form, `owner/repo|file.gguf`, a Hub URL,
+or a bare `owner/repo` to let wllama choose the quant. What you apply joins the
+picker and the link, so it can be sent on like any other selection.
+
 A link **selects** a runtime and downloads nothing — the model still loads on
 `Ask`, as it does for a click. Anything unrecognised is ignored and reported in
 the log rather than failing. `?model=` for web-llm is held until its catalog is
@@ -51,7 +57,8 @@ read, because that list ships inside the library bundle.
 ## Notes
 
 - **Desktop Chrome so far.** Safari and phones are untested.
-- **Models**: one policy for every picker here, in [MODELS.md](MODELS.md).
+- **Models**: one policy for every picker here, in [MODELS.md](MODELS.md). It
+  governs the curated lists; wllama will also load a repo you name yourself.
 - **Spikes**: a bare page per runtime under [`public/spikes/`](public/spikes/),
   no shared abstraction, for when one of them breaks. Not linked from the demo.
 - **Threads**: `npm run dev` sends no COOP/COEP headers, matching the GitHub Pages

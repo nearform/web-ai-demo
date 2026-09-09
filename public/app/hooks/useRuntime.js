@@ -41,6 +41,7 @@ import { textQuality, degeneracyReason } from "../../lib/quality.js";
 import { loadAdapter, getDescriptor } from "../providers/index.js";
 import { readDeepLink, writeDeepLink } from "../util/deeplink.js";
 import { jsonSafe } from "../util/wire.js";
+import { parseGgufSpec } from "../util/hf-gguf.js";
 import {
   DEFAULT_SYSTEM,
   DEFAULT_PROMPT,
@@ -70,6 +71,39 @@ const initialContextFor = (descriptor) =>
     ? (descriptor.context.default ?? null)
     : null;
 
+// A model id nobody vetted, turned into a picker entry. Custom ids join `models`
+// rather than living in a field of their own, so that the picker, the notes, the
+// deep link and load() all keep treating "the selected model" as one thing —
+// there is no second code path for a model that was typed instead of chosen.
+//
+// No sizeMb, deliberately: the size is on the Hub and this page has not asked.
+// An invented number beside a curated one that was measured would be worse than
+// the blank the picker already renders.
+const customEntryFor = (descriptor, id) => {
+  if (!descriptor?.customModel) return null;
+  const spec = parseGgufSpec(id);
+  if (!spec.ok) return null;
+  return {
+    id: spec.id,
+    label: `${spec.label} (custom)`,
+    note: spec.warning ? `${spec.note} ${spec.warning}` : spec.note,
+    custom: true,
+  };
+};
+
+// The list a runtime starts with, plus the deep-linked custom entry if the link
+// named one. A `?model=` for a custom repo has to appear in the picker or the
+// select would render blank while `model` held a value — the URL saying one thing
+// and the control another.
+const initialModelsFor = (descriptor, linkedModel) => {
+  const listed = descriptor?.models ?? null;
+  if (!listed || !linkedModel || listed.some((m) => m.id === linkedModel)) {
+    return listed;
+  }
+  const custom = customEntryFor(descriptor, linkedModel);
+  return custom ? [...listed, custom] : listed;
+};
+
 export const useRuntime = () => {
   // Read once, lazily, before anything can write to the address bar. Everything
   // downstream treats this as the initial selection and nothing else — see
@@ -83,7 +117,9 @@ export const useRuntime = () => {
   const [status, setStatus] = useState("not_loaded");
   const [statusDetail, setStatusDetail] = useState(null);
   const [progress, setProgress] = useState(null);
-  const [models, setModels] = useState(descriptor?.models ?? null);
+  const [models, setModels] = useState(() =>
+    initialModelsFor(descriptor, deepLink.model),
+  );
   const [modelsState, setModelsState] = useState(
     descriptor?.models
       ? "ready"
@@ -337,6 +373,45 @@ export const useRuntime = () => {
       return null;
     }
   }, [descriptor, logger, log]);
+
+  // A specifier typed into the picker rather than chosen from the list. It is
+  // validated HERE, not at load, because the whole value of the check is
+  // catching a typo before it becomes a several-hundred-megabyte request — and
+  // the returned spec is what the input renders its error from.
+  //
+  // The entry is appended to `models` and then selected, so from this point on
+  // nothing downstream can tell it apart from a curated one.
+  const addCustomModel = useCallback(
+    (input) => {
+      if (!descriptor?.customModel) {
+        return {
+          ok: false,
+          error: `${descriptor?.name} does not take a repo.`,
+        };
+      }
+      const spec = parseGgufSpec(input);
+      if (!spec.ok) {
+        log("warn", `Ignoring "${String(input).trim()}": ${spec.error}`);
+        return spec;
+      }
+      const entry = customEntryFor(descriptor, spec.id);
+      setModels((prev) => {
+        const list = prev ?? [];
+        return list.some((m) => m.id === entry.id) ? list : [...list, entry];
+      });
+      setModel(entry.id);
+      log("info", `Custom model selected: ${entry.id}`, {
+        repo: spec.repo,
+        file: spec.file,
+        quant: spec.quant,
+      });
+      // The draft-head trap, said out loud. Nothing refuses the load; the log is
+      // where a reader finds out why the reply was empty.
+      if (spec.warning) log("warn", spec.warning);
+      return spec;
+    },
+    [descriptor, log],
+  );
 
   // --- teardown -------------------------------------------------------------
   const doUnload = useCallback(
@@ -1047,6 +1122,7 @@ export const useRuntime = () => {
     discoverModels,
     model,
     setModel,
+    addCustomModel,
     // knobs
     context,
     setContext,

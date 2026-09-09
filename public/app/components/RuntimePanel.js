@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { html } from "../util/html.js";
 
 const STATUS_LABEL = {
@@ -92,6 +93,71 @@ const ModelPicker = ({
           ? html`<p className="control-note">${selected.note}</p>`
           : null
       }
+    </label>
+  `;
+};
+
+// An arbitrary Hugging Face repo, for the one runtime that can take one. Kept
+// separate from the select rather than folded into it as an "other…" option: the
+// list is a set of vetted picks with measured sizes, and a repo typed in here is
+// explicitly not that. What is applied joins the list — see addCustomModel — so
+// this field is an entry point, not a second kind of selection.
+const CustomModelInput = ({ custom, addCustomModel, disabled }) => {
+  const [text, setText] = useState("");
+  const [error, setError] = useState(null);
+
+  const apply = () => {
+    const spec = addCustomModel(text);
+    if (spec.ok) {
+      // Cleared on success because the field's job is done: the specifier is now
+      // in the picker above, which is where the current selection is read from.
+      setText("");
+      setError(null);
+    } else {
+      setError(spec.error);
+    }
+  };
+
+  return html`
+    <label className="control">
+      <span className="control-label">${custom.label}</span>
+      <div className="control-row">
+        <input
+          type="text"
+          className="control-input"
+          spellcheck="false"
+          autocapitalize="off"
+          autocomplete="off"
+          placeholder=${custom.placeholder}
+          value=${text}
+          onChange=${(e) => {
+            setText(e.target.value);
+            setError(null);
+          }}
+          onKeyDown=${(e) => {
+            // Enter submits. There is no form here, so nothing else would.
+            if (e.key === "Enter") {
+              e.preventDefault();
+              apply();
+            }
+          }}
+          disabled=${disabled}
+        />
+        <button
+          type="button"
+          className="btn btn--small"
+          onClick=${apply}
+          disabled=${disabled || !text.trim()}
+        >
+          Use
+        </button>
+      </div>
+      ${
+        error
+          ? html`<p className="control-note control-note--bad">${error}</p>`
+          : null
+      }
+      <p className="control-note">${custom.note}</p>
     </label>
   `;
 };
@@ -280,6 +346,16 @@ export const RuntimePanel = ({ rt }) => {
         discoverModels=${rt.discoverModels}
         disabled=${lockedAtLoad}
       />
+
+      ${
+        descriptor.customModel
+          ? html`<${CustomModelInput}
+              custom=${descriptor.customModel}
+              addCustomModel=${rt.addCustomModel}
+              disabled=${lockedAtLoad}
+            />`
+          : null
+      }
 
       <${ContextControl}
         descriptor=${descriptor}

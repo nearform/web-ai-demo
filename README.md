@@ -56,7 +56,11 @@ read, because that list ships inside the library bundle.
 
 ## Notes
 
-- **Desktop Chrome so far.** Safari and phones are untested.
+- **Desktop Chrome so far.** The layout is built and checked for a phone — down
+  to 320px wide, portrait and landscape, on every runtime and every spike page —
+  but that check ran in Chrome's device emulation. Real iOS Safari and a real
+  phone are still untested, which is where the runtimes themselves are expected
+  to fail anyway.
 - **Models**: one policy for every picker here, in [MODELS.md](MODELS.md). It
   governs the curated lists; wllama will also load a repo you name yourself.
 - **Spikes**: a bare page per runtime under [`public/spikes/`](public/spikes/),

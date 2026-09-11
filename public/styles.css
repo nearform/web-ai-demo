@@ -15,6 +15,14 @@
   box-sizing: border-box;
 }
 
+/* iOS Safari inflates text in landscape unless told not to. It is the one
+   "responsive" failure that no amount of fluid layout prevents, because the
+   layout is fine and the type it has to hold suddenly is not. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family:
     "Inter",
@@ -35,7 +43,12 @@ body {
   padding: 16px;
   display: flex;
   flex-direction: column;
+  /* dvh, not vh: on a phone `vh` is the viewport with the browser chrome hidden,
+     so a 100vh column is taller than the screen for as long as the URL bar is
+     showing — which is the state the page opens in. The vh line is the fallback
+     for a browser without dvh. */
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Header */

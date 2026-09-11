@@ -52,6 +52,7 @@
 
 .spike-status {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  overflow-wrap: anywhere;
   font-size: 0.85rem;
   padding: 4px 8px;
   border-radius: 4px;
@@ -121,14 +122,16 @@
   border: 1px solid var(--color-border);
   border-radius: 6px;
   font-family: inherit;
-  font-size: 0.9rem;
+  /* 16px because anything less makes iOS Safari zoom the page in on focus and
+     leave it there. A spike that cannot be typed into on a phone is no use for
+     the one test that has to happen on a phone. */
+  font-size: 16px;
   background: var(--color-bg);
 }
 
 .control-input--area {
   resize: vertical;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.85rem;
 }
 
 .btn-row {
@@ -159,6 +162,26 @@
   font-weight: 600;
 }
 
+/* Finger-sized targets. Keyed on the pointer, not the width — see app.css. */
+@media (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+  }
+
+  .spike-header a,
+  .spike-list a {
+    display: inline-block;
+    padding-block: 8px;
+  }
+
+  /* Links inside flowing prose. Vertical padding on an inline box does not move
+     the line it sits in, so this buys hit area and costs no layout. */
+  .spike-notes a,
+  .control > span a {
+    padding-block: 8px;
+  }
+}
+
 .output {
   max-height: 320px;
   overflow-y: auto;
@@ -178,6 +201,9 @@
 
 .turn-text {
   white-space: pre-wrap;
+  /* The failures these pages exist to catch arrive as a CDN URL or a wasm path
+     with no space in it, which pre-wrap alone will happily run off the screen. */
+  overflow-wrap: anywhere;
   font-size: 0.92rem;
 }
 
@@ -196,6 +222,10 @@
 .log-line {
   padding: 3px 0;
   border-bottom: 1px solid var(--color-border);
+}
+
+.log-msg {
+  overflow-wrap: anywhere;
 }
 
 .log-line--warn .log-msg {
@@ -218,6 +248,9 @@
   padding: 6px 8px;
   margin: 4px 0 0;
   overflow-x: auto;
+  /* Swiping one of these sideways past its end must not hand the gesture to
+     Safari's back navigation. */
+  overscroll-behavior-x: contain;
   font-size: 0.75rem;
   white-space: pre;
 }

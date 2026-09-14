@@ -97,11 +97,17 @@ const ModelPicker = ({
   `;
 };
 
-// An arbitrary Hugging Face repo, for the one runtime that can take one. Kept
-// separate from the select rather than folded into it as an "other…" option: the
-// list is a set of vetted picks with measured sizes, and a repo typed in here is
-// explicitly not that. What is applied joins the list — see addCustomModel — so
-// this field is an entry point, not a second kind of selection.
+// A model nobody vetted, for the runtimes that can take one. What counts as a
+// valid entry differs per runtime — a Hub repo, an ONNX repo and dtype, a
+// `.litertlm` URL and backend — but this component knows none of that: the
+// label, the placeholder and the note all come from the descriptor, and
+// addCustomModel validates under whichever grammar that runtime declared.
+//
+// Kept separate from the select rather than folded into it as an "other…"
+// option: the list is a set of vetted picks with measured sizes, and a model
+// typed in here is explicitly not that. What is applied joins the list — see
+// addCustomModel — so this field is an entry point, not a second kind of
+// selection.
 const CustomModelInput = ({ custom, addCustomModel, disabled }) => {
   const [text, setText] = useState("");
   const [error, setError] = useState(null);

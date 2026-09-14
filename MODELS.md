@@ -50,8 +50,10 @@ repo follows it. Sizes below are bytes read off the Hugging Face tree API on
 | Qwen3.5-4B   | `Qwen3.5-4B-Q4_K_M.gguf`       | 2613 MiB | Desktop, and the >2 GiB single-file test          |
 | Gemma 4 E2B  | `gemma-4-E2B-it-Q4_0.gguf`     | 2709 MiB | Rule 1. Desktop only, and expected to be marginal |
 
-wllama also takes a repo **you** name, in the field under the picker: the policy
-above governs the curated list, not what the runtime will accept. A GGUF is a
+wllama also takes a repo **you** name, in the field under the picker — as do
+Transformers.js and LiteRT-LM, each under its own grammar; see "Models you name
+yourself" below. The policy above governs the curated list, not what the runtime
+will accept. A GGUF is a
 GGUF, so there is no vetted-catalog reason to refuse one — `owner/repo:QUANT` as
 llama.cpp's `-hf` takes it, `owner/repo|file.gguf`, a Hub URL, or a bare
 `owner/repo` to let wllama pick the quant. wllama 3.6.0 resolves a quant itself
@@ -119,8 +121,15 @@ Three consequences for the picker:
 
 1. **On the default backend the catalog is Google's allowlist of two**, and that is
    not a conservative reading of the docs — a community `-web.litertlm` downloads
-   and then refuses to load. Rule 6 ("latest generation only") is moot when the
-   generation has one publisher.
+   and then refuses to load. Google's own page says so in as many words: "The
+   LiteRT-LM JS API currently supports a limited set of web-compatible models.
+   We're working on expanding this to cover general `.litertlm` model files, but
+   for now, the following models are supported" — then names
+   `gemma-4-E2B-it-web.litertlm` and `gemma-4-E4B-it-web.litertlm`. Rule 6
+   ("latest generation only") is moot when the generation has one publisher.
+   That "we're working on expanding this" is also why the picker takes a file you
+   name: the allowlist is the kind of fact that goes stale, and re-checking it
+   should not require editing this repo.
 2. **The smallest thing that works is 1915 MiB**, ~5x the iPhone budget. So this
    runtime is desktop-only by arithmetic, and the picker says so in its labels
    rather than implying a phone option exists.
@@ -176,6 +185,43 @@ that cannot work:
 
 Sort by size to find the small end, then exclude `mtp`, `mmproj`, `imatrix`,
 `draft`, and `-0000N-of-0000M` shard members before believing the answer.
+
+## Models you name yourself
+
+The curated lists are what this repo vouches for. Three of the five runtimes will
+also load a model **you** name, in the field under the picker, and the policy
+above does not govern that field — it governs the list. web-llm is the one that
+cannot: its weights have to be compiled to MLC's format ahead of time, so there
+is no arbitrary repo to point it at. Chrome supplies its own model and has
+nothing to select.
+
+Each runtime takes the grammar its own API takes, rather than one invented
+syntax, so what a reader already knows transfers:
+
+| Runtime         | Accepts                                                                                                        | Resolves to                                            |
+| --------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| wllama          | `owner/repo:QUANT`, `owner/repo\|file.gguf`, `owner/repo`, a Hub URL                                           | `loadModelFromHF({ repo, file, quant })`               |
+| Transformers.js | `owner/repo`, `owner/repo:dtype`, `owner/repo\|onnx/model_q4.onnx`, a Hub URL                                  | `pipeline()`'s `subfolder`, `model_file_name`, `dtype` |
+| LiteRT-LM       | `owner/repo/file-web.litertlm`, any `http(s)` `.litertlm` URL, either with a `GPU_ARTISAN\|` or `CPU\|` prefix | `Engine.create({ model: url })` on that backend        |
+
+Three things are true of all three, and they are the point of doing it this way:
+
+1. **Validation happens when you press Use, not when the download starts.** The
+   parsers are pure string code in `public/app/util/`, importing no runtime
+   library, precisely so the picker can reject a typo without pulling a bundle
+   down to do it. A malformed specifier never becomes a several-hundred-megabyte
+   request.
+2. **What you apply joins the picker and the `?model=` link**, so it can be sent
+   on like any other selection. Ids round-trip: what the field accepts is what a
+   link carries back.
+3. **They warn rather than refuse.** Each grammar knows the files that download
+   and then cannot answer — draft heads and vision projectors for wllama,
+   embedding and speech models for Transformers.js, a non-`-web` packaging for
+   LiteRT-LM — and says so in the log before the bytes move. Pointing a runtime
+   at one to see what it does is a legitimate thing to want from this page.
+
+None of these entries carries a size. The size is on the Hub and this page has
+not asked; an invented number beside a measured one would be worse than a blank.
 
 ## When this goes stale
 

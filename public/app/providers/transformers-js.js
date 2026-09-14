@@ -27,6 +27,7 @@ import {
   env,
 } from "@huggingface/transformers";
 import { trackNow } from "../../lib/blackbox.js";
+import { onnxLoadParams, DEFAULT_DTYPE } from "../util/hf-onnx.js";
 
 // dtype is `q4`, NOT `q4f16`, and that is a measured decision rather than a
 // preference. On WebGPU in Chrome 151, q4f16 made SmolLM2-135M emit **zero
@@ -36,7 +37,13 @@ import { trackNow } from "../../lib/blackbox.js";
 // characters. So q4f16 is quietly broken here for at least some models, and it
 // fails by producing nothing rather than by throwing. Related upstream: #1599
 // (q4f16 ~3x slower decode on WebGPU) and #1416 (rotary attention errors).
-const DTYPE = "q4";
+//
+// The constant itself lives in util/hf-onnx.js, which is where a model id is
+// turned into pipeline options: the picker names the dtype it is about to apply
+// while this adapter is still unloaded, so the default cannot live behind an
+// import of this file. A reader who wants a different one says so in the id —
+// `owner/repo:q4f16` — and that override arrives below as spec.dtype.
+const DTYPE = DEFAULT_DTYPE;
 
 // The stopping criteria object, which is this runtime's only cancellation
 // mechanism. Module-scoped so an abort arriving between turns cannot reach a
@@ -100,15 +107,35 @@ export default {
 
   load: async ({ model, log, progress }) => {
     const useWebGpu = "gpu" in navigator;
-    // dtype ALWAYS explicit — see the footgun note at the top of this file, and
-    // the DTYPE note for why it is q4 rather than q4f16.
-    const dtype = DTYPE;
+    // An id is `repo`, `repo:dtype` or `repo|onnx/model_q4.onnx` — see
+    // util/hf-onnx.js for what each resolves to. The curated entries are bare
+    // repos, so they come back as `{ model, dtype: q4 }` and nothing here can
+    // tell them from an id someone typed.
+    const {
+      model: repo,
+      dtype,
+      subfolder,
+      model_file_name,
+    } = onnxLoadParams(model);
     const device = useWebGpu ? "webgpu" : "wasm";
-    log.info(`pipeline("text-generation", "${model}")`, { dtype, device });
-
-    const generator = await pipeline("text-generation", model, {
+    // dtype ALWAYS explicit — see the footgun note at the top of this file, and
+    // the DTYPE note for why the default is q4 rather than q4f16.
+    log.info(`pipeline("text-generation", "${repo}")`, {
       dtype,
       device,
+      // Null unless the id named a file. 4.2.0 defaults subfolder to `onnx` and
+      // model_file_name to null, so leaving them off is not the same as sending
+      // those values — the log says which happened.
+      subfolder: subfolder ?? null,
+      modelFileName: model_file_name ?? null,
+      dtypeFromId: dtype !== DTYPE,
+    });
+
+    const generator = await pipeline("text-generation", repo, {
+      dtype,
+      device,
+      ...(subfolder !== undefined ? { subfolder } : {}),
+      ...(model_file_name !== undefined ? { model_file_name } : {}),
       progress_callback: (p) => {
         // Six variants arrive; progress_total is the only one that describes the
         // whole load rather than one file of many. Gemma 4 here is eight files,

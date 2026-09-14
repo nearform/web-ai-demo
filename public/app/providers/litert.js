@@ -56,6 +56,7 @@
 //     populate it.
 
 import { Engine, Backend, unloadLiteRtLm } from "@litert-lm/core";
+import { litertlmLoadParams } from "../util/litertlm.js";
 
 // Hand-rolled, because the runtime caches nothing. That is not an omission we are
 // working around blind — `dist/engine_settings.js` calls
@@ -67,8 +68,13 @@ const CACHE_NAME = "litertlm-models";
 
 let bakedSystem = null;
 
+// An id is `BACKEND|url`, and util/litertlm.js is where that is decided — it
+// parses what a reader typed, so it has to agree with what is loaded here or a
+// typed id and a chosen one would mean different things. Backend NAME to Backend
+// VALUE is the one step it cannot do: the enum lives in the library bundle, and
+// the picker validates ids while that bundle is still unloaded.
 const parseModelId = (id) => {
-  const [backendName, url] = id.split("|");
+  const { backendName, url } = litertlmLoadParams(id);
   return { backendName, backend: Backend[backendName], url };
 };
 

@@ -41,7 +41,7 @@ import { textQuality, degeneracyReason } from "../../lib/quality.js";
 import { loadAdapter, getDescriptor } from "../providers/index.js";
 import { readDeepLink, writeDeepLink } from "../util/deeplink.js";
 import { jsonSafe } from "../util/wire.js";
-import { parseGgufSpec } from "../util/hf-gguf.js";
+import { parseCustomModel } from "../util/custom-model.js";
 import {
   DEFAULT_SYSTEM,
   DEFAULT_PROMPT,
@@ -81,7 +81,7 @@ const initialContextFor = (descriptor) =>
 // the blank the picker already renders.
 const customEntryFor = (descriptor, id) => {
   if (!descriptor?.customModel) return null;
-  const spec = parseGgufSpec(id);
+  const spec = parseCustomModel(descriptor, id);
   if (!spec.ok) return null;
   return {
     id: spec.id,
@@ -383,13 +383,7 @@ export const useRuntime = () => {
   // nothing downstream can tell it apart from a curated one.
   const addCustomModel = useCallback(
     (input) => {
-      if (!descriptor?.customModel) {
-        return {
-          ok: false,
-          error: `${descriptor?.name} does not take a repo.`,
-        };
-      }
-      const spec = parseGgufSpec(input);
+      const spec = parseCustomModel(descriptor, input);
       if (!spec.ok) {
         log("warn", `Ignoring "${String(input).trim()}": ${spec.error}`);
         return spec;
@@ -400,11 +394,11 @@ export const useRuntime = () => {
         return list.some((m) => m.id === entry.id) ? list : [...list, entry];
       });
       setModel(entry.id);
-      log("info", `Custom model selected: ${entry.id}`, {
-        repo: spec.repo,
-        file: spec.file,
-        quant: spec.quant,
-      });
+      // `detail` rather than named fields: each grammar resolves to a
+      // different set of them — a repo and a quant here, a dtype and a
+      // subfolder there, a backend and a URL for the third — and the parser is
+      // the only thing that knows which.
+      log("info", `Custom model selected: ${entry.id}`, spec.detail ?? {});
       // The draft-head trap, said out loud. Nothing refuses the load; the log is
       // where a reader finds out why the reply was empty.
       if (spec.warning) log("warn", spec.warning);

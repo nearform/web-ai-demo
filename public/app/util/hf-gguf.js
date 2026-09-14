@@ -167,6 +167,10 @@ export const parseGgufSpec = (raw) => {
     label: labelFor(spec),
     note: noteFor(spec),
     warning: warningFor(id),
+    // The fields worth logging when this id is selected, under the key every
+    // specifier parser shares — see util/custom-model.js for why the callers
+    // read one name rather than three per grammar.
+    detail: { repo, file, quant },
   };
 };
 

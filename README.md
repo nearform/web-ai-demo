@@ -43,11 +43,29 @@ The chooser is in the URL, so a selection can be sent to someone:
 `litert`; `model` is a model id from that runtime's picker, URL-encoded. Both
 update as you click, so the address bar is always a link to what is on screen.
 
-For wllama, `model` need not be one of the listed ids — it takes any Hugging Face
-GGUF specifier, which is also what the field under its picker accepts:
-`owner/repo:Q4_K_M` in llama.cpp's `-hf` form, `owner/repo|file.gguf`, a Hub URL,
-or a bare `owner/repo` to let wllama choose the quant. What you apply joins the
-picker and the link, so it can be sent on like any other selection.
+For **wllama**, **Transformers.js** and **LiteRT-LM**, `model` need not be one of
+the listed ids: each takes a model you name, in the field under its picker, under
+the grammar its own API takes. What you apply joins the picker and the link, so it
+can be sent on like any other selection.
+
+- **wllama** — any Hugging Face GGUF specifier: `owner/repo:Q4_K_M` in
+  llama.cpp's `-hf` form, `owner/repo|file.gguf`, a Hub URL, or a bare
+  `owner/repo` to let wllama choose the quant.
+- **Transformers.js** — any repository of ONNX weights: `owner/repo`,
+  `owner/repo:q4f16` to choose the quantization, `owner/repo|onnx/model_q4.onnx`
+  to choose the file, or a Hub URL. Weights are read from the repo's `onnx/`
+  subfolder, which is what `pipeline()` defaults to.
+- **LiteRT-LM** — any `.litertlm` file: `owner/repo/model-web.litertlm`, a Hub
+  URL, or any `http(s)` URL, optionally prefixed `GPU_ARTISAN|` or `CPU|` to pick
+  the backend. Google documents the JS API as supporting a limited set of
+  web-compatible models — currently two `-web.litertlm` files — so another file
+  may download in full and then fail to load.
+
+Nothing is checked against the Hub before you press Load, so an id that parses is
+not an id that exists. What the field _does_ catch is the shape, and the files
+that download and then cannot answer — a draft head, a vision projector, an
+embedding model, a non-`-web` LiteRT packaging — which are called out in the log
+before the bytes move. See [MODELS.md](MODELS.md) for the full grammars.
 
 A link **selects** a runtime and downloads nothing — the model still loads on
 `Ask`, as it does for a click. Anything unrecognised is ignored and reported in

@@ -240,10 +240,11 @@ export const DESCRIPTORS = [
       // Both of these sort above the model itself when ordering by size.
       note: "A fixed list of GGUF files, plus any repo you name yourself. When adding to the list, note that `mtp-*` files are draft heads and `mmproj-*` are vision projectors rather than models.",
     },
-    // The only runtime here that will load a model nobody vetted: a GGUF is a
-    // GGUF, so the picker does not have to be a catalog. web-llm needs its
-    // weights compiled to its own format and LiteRT-LM refuses community
-    // packaging outright, so neither can offer this.
+    // Three of the five take a model nobody vetted, each under the grammar its
+    // own API uses; see util/custom-model.js. web-llm is the one that cannot:
+    // its weights have to be compiled to MLC's format ahead of time, so there is
+    // no arbitrary repo to name. Chrome supplies its own model and has nothing
+    // to select.
     customModel: {
       kind: "hf-gguf",
       label: "Or a Hugging Face repo",
@@ -356,7 +357,16 @@ export const DESCRIPTORS = [
     },
     modelChoice: {
       kind: "static",
-      note: "A fixed list of ONNX repositories. Sizes are the summed q4 weight files.",
+      note: "A list of ONNX repositories, plus any repository you name yourself. Sizes are the summed q4 weight files.",
+    },
+    // `pipeline()` takes a Hub id and fetches from it, so the picker does not
+    // have to be a catalog. The three options an id can set here — `subfolder`,
+    // `model_file_name`, `dtype` — are the ones 4.2.0's `pipeline()` declares.
+    customModel: {
+      kind: "hf-onnx",
+      label: "Or a Hugging Face repo",
+      placeholder: "onnx-community/Qwen3.5-0.8B-Text-ONNX:q4f16",
+      note: "`owner/repo` for a repository of ONNX weights, `owner/repo:dtype` to pick the quantization, `owner/repo|onnx/model_q4.onnx` to pick the file, or a Hub URL. Weights are read from the `onnx/` subfolder, which is `pipeline()`'s `subfolder` default. Nothing checks that the file exists first.",
     },
     context: {
       control: "none",
@@ -451,7 +461,17 @@ export const DESCRIPTORS = [
     },
     modelChoice: {
       kind: "static",
-      note: "One entry. The model id carries its backend, which decides whether the file is streamed to the GPU or staged through the WASM filesystem.",
+      note: "One entry, plus any `.litertlm` file you name yourself. The model id carries its backend, which decides whether the file is streamed to the GPU or staged through the WASM filesystem.",
+    },
+    // `Engine.create({ model })` takes a URL, so any reachable `.litertlm` can
+    // be named. What it will ACCEPT is narrower than what it will fetch, and the
+    // note says so in Google's own words rather than ours.
+    customModel: {
+      kind: "litertlm",
+      label: "Or a .litertlm file",
+      placeholder:
+        "litert-community/gemma-4-E4B-it-litert-lm/gemma-4-E4B-it-web.litertlm",
+      note: "A Hub path, a Hub URL, or any `http(s)` URL ending `.litertlm` — optionally prefixed `GPU_ARTISAN|` or `CPU|` to choose the backend. Google documents the JS API as supporting a limited set of web-compatible models, currently the two `-web.litertlm` Gemma 4 files, so another file may download in full and then fail to load.",
     },
     context: {
       control: "load",

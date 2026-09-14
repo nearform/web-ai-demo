@@ -174,6 +174,7 @@ export default {
     messages,
     system,
     json,
+    tools,
     replyCap,
     onChunk,
     stats,
@@ -188,6 +189,20 @@ export default {
       // prompt and nothing constrains the tokens.
       log.warn(
         "JSON requested in the prompt only. GenerationConfig has no grammar or response-format field, so the schema is not enforced.",
+      );
+    }
+
+    if (tools) {
+      // Stated every turn, for the same reason the JSON warning above is. The
+      // declarations DO reach the model — `tools` is an apply_chat_template
+      // argument and 4.2.0's TextGenerationPipeline passes it through — but the
+      // package has no tool-call type, no `finish_reason` and no parser. So a
+      // reply that contains a perfectly well-formed tool call is, here, a
+      // string. Nothing runs. Writing the parser is the job this runtime leaves
+      // to you, and pretending otherwise by hand-rolling one in this adapter
+      // would hide the one thing worth comparing.
+      log.warn(
+        "Tool declarations go into the chat template and no further. Transformers.js parses no call back out, so nothing will run — whatever the model emits arrives as text. If the template does not support tool use, `tools` has no effect at all.",
       );
     }
 
@@ -228,6 +243,7 @@ export default {
     wire?.({
       request: {
         conversation,
+        ...(tools ? { tools: tools.declarations } : {}),
         max_new_tokens: replyCap,
         streamer: { skip_prompt: true, skip_special_tokens: true },
         stopping_criteria: "InterruptableStoppingCriteria",
@@ -238,6 +254,10 @@ export default {
     const startedAt = performance.now();
     try {
       const output = await handle(conversation, {
+        // Straight to apply_chat_template. Whether the model's template knows
+        // what to do with it is the model's business; the docs are explicit
+        // that an unaware template ignores the argument silently.
+        ...(tools ? { tools: tools.declarations } : {}),
         max_new_tokens: replyCap,
         streamer,
         stopping_criteria: stopper,
@@ -265,6 +285,12 @@ export default {
           elapsedS > 0 ? Number((tokenCount / elapsedS).toFixed(1)) : null,
         maxNewTokens: replyCap,
         historyResentByUs: true,
+        toolsDeclared: tools ? tools.declarations.length : 0,
+        // Always zero, and that is the finding rather than an omission: the
+        // declarations reached the template and no code path exists to turn a
+        // reply back into a call.
+        toolCallsMade: 0,
+        toolsParsedByRuntime: false,
         // False even when JSON mode is on — the instruction went in the prompt,
         // but no grammar constrained the tokens.
         jsonConstrained: false,

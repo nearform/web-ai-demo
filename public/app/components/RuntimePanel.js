@@ -83,11 +83,25 @@ const ModelPicker = ({
         ${(models ?? []).map(
           (m) => html`
             <option key=${m.id} value=${m.id}>
-              ${m.sizeMb ? `${m.label} — ${m.sizeMb} MB` : m.label}
+              ${m.sizeMb ? `${m.label} — ${m.sizeMb} MB` : m.label}${
+                m.toolCapable ? " · tool calling" : ""
+              }
             </option>
           `,
         )}
       </select>
+      ${
+        // Only where "which model" and "can it call a tool" are different
+        // questions, which today is web-llm alone: its library accepts `tools`
+        // for a fixed handful of ids and throws for the rest. An <option> takes
+        // no markup, so the marker has to live in the text.
+        (models ?? []).some((m) => m.toolCapable)
+          ? html`<p className="control-note">
+              <code>· tool calling</code> marks the models this runtime will
+              accept a tool declaration for. The rest are refused.
+            </p>`
+          : null
+      }
       ${
         selected?.note
           ? html`<p className="control-note">${selected.note}</p>`

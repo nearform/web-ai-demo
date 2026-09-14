@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { html } from "../util/html.js";
 import { formatWire } from "../util/wire.js";
+import { DEFAULT_TOOL_PROMPT } from "../providers/descriptors.js";
 
 // Whether the reply parses as JSON. Three of the five constrain the grammar; on
 // the other two the schema is only a request in the prompt. Showing the parse
@@ -15,6 +16,141 @@ const tryParse = (text) => {
   } catch (err) {
     return { ok: false, reason: err.message };
   }
+};
+
+// What the toggle promises. Three states rather than two, because "the
+// declarations were sent and nothing can read a call back out" is neither of the
+// other two — see the Tool calling row in the comparison table.
+const TOOL_BADGE = {
+  parsed: { text: "runs your function", tone: "ok" },
+  template: { text: "template only — nothing runs", tone: "bad" },
+  none: { text: "sent and ignored", tone: "bad" },
+};
+
+// …but on web-llm the runtime's answer and this model's answer are different
+// questions: `tools` is accepted for five Hermes ids and throws for every other
+// entry in the catalog. The comparison table is about the runtime and says
+// "yes"; a badge sitting beside a loaded 135M model has to be about the model.
+const toolBadgeFor = (descriptor, model) => {
+  const allowlist = descriptor.tools.modelAllowlist;
+  if (allowlist && model && !allowlist.includes(model)) {
+    return { text: "not on this model", tone: "bad" };
+  }
+  return TOOL_BADGE[descriptor.tools.kind];
+};
+
+const toolsReachTheModel = (descriptor, model) =>
+  !descriptor.tools.modelAllowlist ||
+  !model ||
+  descriptor.tools.modelAllowlist.includes(model);
+
+// The reader's function, and the declaration derived from it.
+//
+// Both are shown, and that is the point rather than a debugging aid: the JSON
+// Schema is what actually goes to the model, the types in it were inferred from
+// text that carries no types, and a reader who cannot see the result has no way
+// to tell a tool that was never called from one that was declared wrong.
+const ToolEditor = ({
+  descriptor,
+  source,
+  setSource,
+  tool,
+  setPrompt,
+  disabled,
+}) => html`
+  <div className="tool-editor">
+    <textarea
+      className="control-input control-input--area control-input--code"
+      rows="3"
+      spellcheck="false"
+      autocapitalize="off"
+      autocomplete="off"
+      value=${source}
+      onChange=${(e) => setSource(e.target.value)}
+      disabled=${disabled}
+      aria-label="Tool function source"
+    ></textarea>
+    ${
+      tool.ok
+        ? html`
+            <p className="control-note">
+              Declared as <code>${tool.signature}</code>${" "}
+              ${
+                tool.params.some((p) => !p.annotated)
+                  ? html`— a parameter with no annotation is declared
+                      a${" "}<code>number</code>; write${" "}
+                      <code>(name: string)</code> for anything else.`
+                  : null
+              }
+            </p>
+            <details className="tool-schema">
+              <summary>The declaration that will be sent</summary>
+              <pre className="wire-body">
+${JSON.stringify(
+  {
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+  },
+  null,
+  2,
+)}</pre>
+            </details>
+          `
+        : html`<p className="control-note control-note--bad">${tool.error}</p>`
+    }
+    <div className="btn-row">
+      <button
+        type="button"
+        className="btn btn--small"
+        onClick=${() => setPrompt(DEFAULT_TOOL_PROMPT)}
+        disabled=${disabled}
+      >
+        Ask a question this tool answers
+      </button>
+    </div>
+    <p className="control-note">
+      A model reaches for a tool when it knows it cannot answer without one, so
+      the tool and the question have to match — that button puts
+      <em>“${DEFAULT_TOOL_PROMPT}”</em> in the prompt box. The default function
+      is a stub that returns the same string for every city; what is worth
+      watching is whether the call appears above the reply, not the forecast.
+    </p>
+    <p className="control-note">
+      ${descriptor.tools.note} This page evaluates what you type, here in this
+      tab. Nothing is sent anywhere.
+    </p>
+  </div>
+`;
+
+// The calls that happened, between the question and the answer. Rendered from
+// the run record rather than the reply, because a model that described calling
+// a tool and a model that called one look identical in prose.
+const ToolCalls = ({ calls }) => {
+  if (!calls?.length) return null;
+  return html`
+    <div className="tool-calls">
+      ${calls.map(
+        (c, i) => html`
+          <div
+            className=${`tool-call${c.error ? " tool-call--bad" : ""}`}
+            key=${i}
+          >
+            <span className="tool-call-name"
+              >${c.name}(${Object.entries(c.args ?? {})
+                .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+                .join(", ")})</span
+            >
+            <span className="tool-call-arrow" aria-hidden="true">→</span>
+            <span className="tool-call-result">
+              ${c.error ? c.error : JSON.stringify(c.result)}
+            </span>
+            <span className="tool-call-ms">${c.ms}ms</span>
+          </div>
+        `,
+      )}
+    </div>
+  `;
 };
 
 // Per-turn numbers, as a strip under the reply. Figures the runtime reported and
@@ -187,7 +323,7 @@ const WireModal = ({ wire, descriptor, turn, shownChars, onClose }) => {
   `;
 };
 
-const Turn = ({ turn, descriptor, onShowWire }) => {
+const Turn = ({ turn, descriptor, model, onShowWire }) => {
   if (turn.role === "user") {
     return html`
       <div className="turn turn--user">
@@ -196,6 +332,11 @@ const Turn = ({ turn, descriptor, onShowWire }) => {
           ${
             turn.jsonMode
               ? html`<span className="turn-flag">JSON requested</span>`
+              : null
+          }
+          ${
+            turn.toolsActive
+              ? html`<span className="turn-flag">tool declared</span>`
               : null
           }
         </div>
@@ -223,6 +364,26 @@ const Turn = ({ turn, descriptor, onShowWire }) => {
                 }
               </div>
             `
+          : null
+      }
+      <${ToolCalls} calls=${turn.run?.toolCalls} />
+      ${
+        // Declared and not called. Worth its own line because on three of the
+        // five that is the expected outcome and on the other two it is the
+        // interesting one, and a reply that merely *talks* about adding two
+        // numbers looks the same either way.
+        turn.run?.toolRequested && !turn.run?.toolCalls?.length
+          ? html`<div className="json-verdict json-verdict--bad">
+              ${
+                !toolsReachTheModel(descriptor, model)
+                  ? "The declaration was not sent: this runtime accepts tools for a fixed list of models and this is not one of them."
+                  : descriptor.tools.kind === "parsed"
+                    ? "A tool was declared and the model did not call it."
+                    : descriptor.tools.kind === "template"
+                      ? "The declaration went into the chat template. Nothing here parses a call back out, so nothing ran."
+                      : "The declaration was sent and dropped — this runtime ships no tool option to receive it."
+              }
+            </div>`
           : null
       }
       <div className="turn-text">
@@ -282,6 +443,7 @@ export const Chat = ({ rt }) => {
   // while a turn is running for a reason the controller enforces too: the reply
   // in flight would land in the new conversation.
   const canReset = !busy && (rt.turns.length > 0 || rt.streaming);
+  const toolBadge = toolBadgeFor(descriptor, rt.model);
 
   return html`
     <section className="panel panel--chat">
@@ -314,6 +476,7 @@ export const Chat = ({ rt }) => {
               key=${i}
               turn=${t}
               descriptor=${descriptor}
+              model=${rt.model}
               onShowWire=${() => setWireIndex(i)}
             />`,
         )}
@@ -400,6 +563,19 @@ export const Chat = ({ rt }) => {
             }
           </span>
         </label>
+        <label className="control--inline json-toggle">
+          <input
+            type="checkbox"
+            checked=${rt.toolsMode}
+            onChange=${(e) => rt.setToolsMode(e.target.checked)}
+          />
+          <span>
+            Tool
+            <span className=${`control-flag control-flag--${toolBadge.tone}`}
+              >${toolBadge.text}</span
+            >
+          </span>
+        </label>
       </div>
       ${
         // Only while it is on. The badge beside the checkbox already says whether
@@ -407,6 +583,18 @@ export const Chat = ({ rt }) => {
         // for.
         rt.jsonMode
           ? html`<p className="control-note">${descriptor.json.note}</p>`
+          : null
+      }
+      ${
+        rt.toolsMode
+          ? html`<${ToolEditor}
+              descriptor=${descriptor}
+              source=${rt.toolSource}
+              setSource=${rt.setToolSource}
+              tool=${rt.tool}
+              setPrompt=${rt.setPrompt}
+              disabled=${busy}
+            />`
           : null
       }
       ${

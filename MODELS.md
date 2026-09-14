@@ -31,10 +31,18 @@ repo follows it. Sizes below are bytes read off the Hugging Face tree API on
    quantized build. For scale: SmolLM2-360M is 376 MB at `q4f16_1` and 1744 MB at
    `q0f32`.
 9. **One entry per class means the base family, not every fine-tune of it.** So no
-   `Hermes-3-*` (fine-tunes of Llama) and no `DeepSeek-R1-Distill-*` (distills onto
-   Llama and Qwen bases), since Llama and Qwen are already listed. Same for
-   variants that are not sizes: of `Ministral-3-3B` in Base / Instruct /
-   Reasoning, only Instruct ships.
+   `DeepSeek-R1-Distill-*` (distills onto Llama and Qwen bases), since Llama and
+   Qwen are already listed. Same for variants that are not sizes: of
+   `Ministral-3-3B` in Base / Instruct / Reasoning, only Instruct ships.
+
+   **One exception, and it is a capability rather than a preference:** the five
+   `Hermes-2-Pro-*` / `Hermes-3-*` ids web-llm ships are Llama and Mistral
+   fine-tunes, and they are also the entire set the library will accept `tools`
+   for — every other id in the catalog throws `UnsupportedModelIdError`. Dropping
+   them as fine-tunes would leave the demo's capability table claiming tool
+   calling that nothing in its own picker could demonstrate, so they are
+   admitted, labeled with why, and left at the bottom of the list on size.
+
 10. **No reduced-context duplicates** — web-llm's `-1k` entries are the same model
     with a smaller window.
 

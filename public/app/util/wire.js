@@ -26,33 +26,45 @@ export const jsonSafe = (value, seen = new WeakSet(), depth = 0) => {
 
   if (depth >= MAX_DEPTH) return "[too deep]";
 
-  // Cycles and shared structure. A `messages` array reused across turns is not
-  // cyclic, but it is the kind of thing that becomes cyclic by accident, and one
-  // stack overflow here would take out the whole conversation panel.
+  // Cycles only — meaning an object that contains ITSELF, somewhere up its own
+  // parent chain. `seen` therefore holds the current path and is unwound on the
+  // way back out, not a running set of everything ever visited.
+  //
+  // The distinction is not academic. A tool-calling turn reports one request per
+  // round trip, and rounds 1 and 2 hold the same message objects: with a global
+  // set, every message round 1 already showed rendered as "[circular]" in round
+  // 2, which is precisely the history a reader opened the panel to read. Shared
+  // structure is not a cycle, and the panel has to show it twice.
   if (seen.has(value)) return "[circular]";
   seen.add(value);
+  const done = (out) => {
+    seen.delete(value);
+    return out;
+  };
 
   if (Array.isArray(value)) {
-    return value.map((v) => jsonSafe(v, seen, depth + 1));
+    return done(value.map((v) => jsonSafe(v, seen, depth + 1)));
   }
 
   // Dates and anything else that already knows how to describe itself as data.
   if (typeof value.toJSON === "function") {
     try {
-      return jsonSafe(value.toJSON(), seen, depth + 1);
+      return done(jsonSafe(value.toJSON(), seen, depth + 1));
     } catch {
-      return "[toJSON threw]";
+      return done("[toJSON threw]");
     }
   }
 
   if (value instanceof Error) {
-    return { name: value.name, message: value.message };
+    return done({ name: value.name, message: value.message });
   }
 
   // Typed arrays and the like: the length is the informative part, not 40,000
   // numbers.
   if (ArrayBuffer.isView(value)) {
-    return `[${value.constructor?.name ?? "TypedArray"}(${value.length ?? value.byteLength})]`;
+    return done(
+      `[${value.constructor?.name ?? "TypedArray"}(${value.length ?? value.byteLength})]`,
+    );
   }
 
   // A plain object is data; anything else is an instance whose identity is the
@@ -61,14 +73,14 @@ export const jsonSafe = (value, seen = new WeakSet(), depth = 0) => {
   const proto = Object.getPrototypeOf(value);
   if (proto !== Object.prototype && proto !== null) {
     const name = value.constructor?.name;
-    return `[${name || "object"}]`;
+    return done(`[${name || "object"}]`);
   }
 
   const out = {};
   for (const [k, v] of Object.entries(value)) {
     out[k] = jsonSafe(v, seen, depth + 1);
   }
-  return out;
+  return done(out);
 };
 
 /** Pretty JSON for the panel, with the same no-throw guarantee. */

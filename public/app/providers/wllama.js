@@ -209,6 +209,7 @@ export default {
     messages,
     system,
     json,
+    tools,
     replyCap,
     onChunk,
     stats,
@@ -233,52 +234,53 @@ export default {
       ...messages,
     ];
 
-    const request = {
-      messages: payload,
-      stream: true,
-      // Without this a turn runs until it hits EOG or exhausts n_ctx, and a small
-      // model asked "what is node.js?" will happily produce 10,000 characters —
-      // which reads as a hang, not as an answer. Measured: 2304 chunks / 9948
-      // chars in 20.7s before a human gave up and hit Stop.
-      max_tokens: replyCap,
-      // Qwen3.5's chat template takes an `enable_thinking` flag, and the GGUF
-      // build behaves as though it defaults ON even though the model card says
-      // non-thinking is the default: asked "what is node.js?" it spent its whole
-      // budget emitting "Thinking Process: 1. Analyze the Request..." as ordinary
-      // content and never reached an answer. Templates that do not know the flag
-      // ignore it.
-      chat_template_kwargs: { enable_thinking: false },
-      // cache_prompt is a pass-through to llama-server, and timings_per_token is
-      // what makes cache_n visible per chunk. Together they are how you tell
-      // whether prefix reuse actually happens across turns.
-      cache_prompt: true,
-      timings_per_token: true,
-      abortSignal: signal,
-    };
-
-    if (json) {
-      // Note the shape difference from web-llm: `schema` here is an object, not
-      // a JSON string. Same-looking field, different contract.
-      request.response_format = {
-        type: "json_schema",
-        json_schema: { name: "answer", schema: json.schema },
+    const buildRequest = () => {
+      const request = {
+        messages: payload,
+        stream: true,
+        // Without this a turn runs until it hits EOG or exhausts n_ctx, and a small
+        // model asked "what is node.js?" will happily produce 10,000 characters —
+        // which reads as a hang, not as an answer. Measured: 2304 chunks / 9948
+        // chars in 20.7s before a human gave up and hit Stop.
+        max_tokens: replyCap,
+        // Qwen3.5's chat template takes an `enable_thinking` flag, and the GGUF
+        // build behaves as though it defaults ON even though the model card says
+        // non-thinking is the default: asked "what is node.js?" it spent its whole
+        // budget emitting "Thinking Process: 1. Analyze the Request..." as ordinary
+        // content and never reached an answer. Templates that do not know the flag
+        // ignore it.
+        chat_template_kwargs: { enable_thinking: false },
+        // cache_prompt is a pass-through to llama-server, and timings_per_token is
+        // what makes cache_n visible per chunk. Together they are how you tell
+        // whether prefix reuse actually happens across turns.
+        cache_prompt: true,
+        timings_per_token: true,
+        abortSignal: signal,
       };
-      log.info("response_format: json_schema (pass-through to llama-server)");
-    }
 
-    // `abortSignal` is a live object rather than data, so it shows in the panel
-    // as a marker naming its type. Everything else here is verbatim.
-    wire?.({
-      request,
-      note: "The whole history is resent every turn. Reasoning arrives as ordinary content on this runtime and cannot be filtered, so it is shown as part of the answer.",
-    });
+      if (tools) {
+        // No load-time flag turns this on — upstream's own examples/tools page
+        // loads with nothing but a progress callback. The whole options object
+        // is JSON.stringify'd into the WASM, so `tools` lands in llama-server's
+        // handler and the GGUF's template decides whether anything comes back.
+        request.tools = tools.declarations.map((d) => ({
+          type: "function",
+          function: d,
+        }));
+        request.tool_choice = "auto";
+      }
 
-    // Deliberately NOT using the onData overload. With onData supplied,
-    // createChatCompletion resolves to void — measured, not assumed: the first
-    // run of this spike reported every token figure as null because of it. The
-    // async-iterator overload (omit onData with stream: true) is the only shape
-    // that exposes the final chunk, which is where usage and timings ride.
-    const stream = await instance.createChatCompletion(request);
+      if (json) {
+        // Note the shape difference from web-llm: `schema` here is an object, not
+        // a JSON string. Same-looking field, different contract.
+        request.response_format = {
+          type: "json_schema",
+          json_schema: { name: "answer", schema: json.schema },
+        };
+        log.info("response_format: json_schema (pass-through to llama-server)");
+      }
+      return request;
+    };
 
     // Usage and timings may arrive on the last chunk or be sprinkled per chunk
     // depending on timings_per_token, so keep the most recent sighting of each
@@ -287,6 +289,8 @@ export default {
     let timings = null;
     let reasoningChars = 0;
     let contentChars = 0;
+    let toolCallsMade = 0;
+    const requestsSent = [];
 
     const reportStats = () =>
       stats({
@@ -305,6 +309,9 @@ export default {
         contentChars,
         historyResentByUs: true,
         jsonConstrained: Boolean(json),
+        toolsDeclared: tools ? tools.declarations.length : 0,
+        toolCallsMade,
+        requestsThisTurn: requestsSent.length,
         runtimeReportsItsOwnRates: true,
         // Kept raw so a shape we didn't anticipate is still visible in the
         // diagnostics rather than silently flattened to nulls again.
@@ -317,23 +324,110 @@ export default {
     // past it and every token count, rate and cache figure came back null — on
     // exactly the runs where "what was it doing when I gave up" is the question.
     try {
-      for await (const chunk of stream) {
-        const delta = chunk.choices?.[0]?.delta ?? {};
+      const maxRounds = tools ? (tools.maxRounds ?? 4) : 1;
+      for (let round = 1; round <= maxRounds; round += 1) {
+        const request = buildRequest();
+        // A SNAPSHOT of the history, not the live array. `payload` is mutated
+        // between rounds — the assistant's tool_calls and the tool result are
+        // pushed onto it — and the panel renders these after the turn ends, so
+        // holding the reference would show round 1 carrying messages that did
+        // not exist when round 1 was sent. The panel's whole job is to be exact.
+        requestsSent.push({ ...request, messages: [...payload] });
+        // `abortSignal` is a live object rather than data, so it shows in the panel
+        // as a marker naming its type. Everything else here is verbatim.
+        wire?.({
+          request: requestsSent.length === 1 ? request : requestsSent,
+          note:
+            requestsSent.length === 1
+              ? "The whole history is resent every turn. Reasoning arrives as ordinary content on this runtime and cannot be filtered, so it is shown as part of the answer."
+              : "One entry per round trip: the model asked for a tool, the result went back as a `tool` message, and the whole history was resent. Reasoning arrives as ordinary content and is shown as part of the answer.",
+        });
 
-        // Reasoning models put their thinking on a separate channel, and reading
-        // only `content` can make a turn look completely dead: measured on
-        // Qwen3.5-0.8B at Q2_K_XL, 4050 tokens over 37s with zero visible output.
-        if (delta.reasoning_content) {
-          reasoningChars += delta.reasoning_content.length;
-          onChunk(delta.reasoning_content);
-        }
-        if (delta.content) {
-          contentChars += delta.content.length;
-          onChunk(delta.content);
+        // Deliberately NOT using the onData overload. With onData supplied,
+        // createChatCompletion resolves to void — measured, not assumed: the first
+        // run of this spike reported every token figure as null because of it. The
+        // async-iterator overload (omit onData with stream: true) is the only shape
+        // that exposes the final chunk, which is where usage and timings ride.
+        const stream = await instance.createChatCompletion(request);
+
+        // Fragments keyed by `index`, exactly as upstream's tool example
+        // accumulates them: the name and the arguments both arrive in pieces.
+        const collected = new Map();
+        let finishReason = null;
+
+        for await (const chunk of stream) {
+          const choice = chunk.choices?.[0];
+          finishReason = choice?.finish_reason ?? finishReason;
+          const delta = choice?.delta ?? {};
+
+          // Reasoning models put their thinking on a separate channel, and reading
+          // only `content` can make a turn look completely dead: measured on
+          // Qwen3.5-0.8B at Q2_K_XL, 4050 tokens over 37s with zero visible output.
+          if (delta.reasoning_content) {
+            reasoningChars += delta.reasoning_content.length;
+            onChunk(delta.reasoning_content);
+          }
+          if (delta.content) {
+            contentChars += delta.content.length;
+            onChunk(delta.content);
+          }
+          for (const tc of delta.tool_calls ?? []) {
+            const entry = collected.get(tc.index) ?? {
+              id: "",
+              name: "",
+              arguments: "",
+            };
+            if (tc.id) entry.id = tc.id;
+            if (tc.function?.name) entry.name += tc.function.name;
+            if (tc.function?.arguments)
+              entry.arguments += tc.function.arguments;
+            collected.set(tc.index, entry);
+          }
+
+          if (chunk.usage) usage = chunk.usage;
+          if (chunk.timings) timings = chunk.timings;
         }
 
-        if (chunk.usage) usage = chunk.usage;
-        if (chunk.timings) timings = chunk.timings;
+        const calls = [...collected.values()];
+        if (finishReason !== "tool_calls" || calls.length === 0) break;
+        if (signal?.aborted) break;
+
+        payload.push({
+          role: "assistant",
+          content: null,
+          tool_calls: calls.map((c) => ({
+            id: c.id,
+            type: "function",
+            function: { name: c.name, arguments: c.arguments },
+          })),
+        });
+
+        for (const call of calls) {
+          let args = {};
+          try {
+            args = JSON.parse(call.arguments);
+          } catch (err) {
+            log.warn(
+              `Tool arguments did not parse as JSON: ${call.arguments}`,
+              {
+                message: String(err),
+              },
+            );
+          }
+          const result = await tools.call(call.name, args);
+          toolCallsMade += 1;
+          payload.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: JSON.stringify(result),
+          });
+        }
+
+        if (round === maxRounds) {
+          log.warn(
+            `Stopped after ${maxRounds} tool round(s) without a final answer. The tool results are in the history; the model never came back with prose.`,
+          );
+        }
       }
     } finally {
       if (reasoningChars > 0 && contentChars === 0) {

@@ -78,6 +78,23 @@ const AXES = [
     tone: (d) => (d.json.supported ? "good" : "bad"),
     note: (d) => d.json.note,
   },
+  // Three states, not two. "template only" is Transformers.js: the declarations
+  // reach the model, and nothing reads a call back out — which is a different
+  // answer from both "yes" and "no", and collapsing it into either would hide
+  // the only genuinely interesting position on this axis.
+  {
+    key: "tools",
+    label: "Tool calling",
+    value: (d) =>
+      ({
+        parsed: YES,
+        template: "template only",
+        none: NO,
+      })[d.tools.kind],
+    tone: (d) =>
+      ({ parsed: "good", template: "warn", none: "bad" })[d.tools.kind],
+    note: (d) => d.tools.note,
+  },
   {
     key: "rates",
     label: "Reports token rates",

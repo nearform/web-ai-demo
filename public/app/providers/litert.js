@@ -55,7 +55,7 @@
 //     the tidy reasoning channel this runtime offers only helps for models that
 //     populate it.
 
-import { Engine, Backend, unloadLiteRtLm } from "@litert-lm/core";
+import { Engine, Backend, AutoToolChat, unloadLiteRtLm } from "@litert-lm/core";
 import { litertlmLoadParams } from "../util/litertlm.js";
 
 // Hand-rolled, because the runtime caches nothing. That is not an omission we are
@@ -67,6 +67,36 @@ import { litertlmLoadParams } from "../util/litertlm.js";
 const CACHE_NAME = "litertlm-models";
 
 let bakedSystem = null;
+// The declarations the live conversation was built with, as JSON so a change is
+// a string comparison. Tools go into `preface.tools`, which is construction-time
+// state exactly like the system prompt — so the same "you edited it and it did
+// not take" warning applies, and needs the same remembered value to fire.
+let bakedTools = null;
+
+/**
+ * The tool-running wrapper, built the same way in both places that need one:
+ * load(), and the recovery after a cancelled turn strands `isBusy` — see the
+ * note in generate(). Factored out so those two cannot drift, which would mean
+ * a conversation that silently differs from the one it replaced.
+ *
+ * AutoToolChat builds its base conversation lazily from `config` plus a
+ * `preface.tools` it derives from these declarations, and throws if `config`
+ * already carries preface.tools — so the declarations go here and nowhere else.
+ */
+const newAutoToolChat = (engine, conversationConfig, tools, log) =>
+  new AutoToolChat({
+    engine,
+    config: conversationConfig,
+    tools: tools.declarations.map((d) => ({
+      ...d,
+      // The library calls this itself, between decode rounds, and waits for
+      // every call in a batch before waking the model. Nothing else here does.
+      execute: (args) => tools.call(d.name, args),
+    })),
+    recurringToolCallLimit: tools.maxRounds,
+    onToolProgress: (event) =>
+      log.info(`tool ${event.name} ${event.status}`, event),
+  });
 
 // An id is `BACKEND|url`, and util/litertlm.js is where that is decided — it
 // parses what a reader typed, so it has to agree with what is loaded here or a
@@ -267,7 +297,7 @@ export default {
     return { ok: true, detail: { relaxedSimd, jspi, webgpu } };
   },
 
-  load: async ({ model, system, context, replyCap, log, progress }) => {
+  load: async ({ model, system, context, replyCap, tools, log, progress }) => {
     const { backendName, backend, url } = parseModelId(model);
     if (backend === undefined) {
       throw new Error(`Unknown backend in model id: ${backendName}`);
@@ -357,18 +387,46 @@ export default {
       // so turn 1's time-to-first-token measures turn 1 and not the preface.
       prefillPrefaceOnInit: true,
     };
-    const conversation = await engine.createConversation(conversationConfig);
+    // With a tool declared, the conversation is wrapped rather than used
+    // directly. AutoToolChat implements the same ChatInterface — sendMessage,
+    // sendMessageStreaming, getHistory, getTokenCount, getBenchmarkInfo, delete
+    // — so everything downstream of here treats the two identically, and the
+    // adapter's generate() loop does not fork.
+    //
+    // It also creates its own base conversation lazily, from the config we hand
+    // it plus a `preface.tools` it builds from the declarations. It THROWS if
+    // the config already carries preface.tools, so the tools stay out of
+    // conversationConfig and go in beside it.
+    bakedTools = tools ? JSON.stringify(tools.declarations) : null;
+    const conversation = tools
+      ? newAutoToolChat(engine, conversationConfig, tools, log)
+      : await engine.createConversation(conversationConfig);
+
+    // Forces AutoToolChat's lazy base conversation into existence now rather
+    // than on the first turn — which is what prefillPrefaceOnInit above is
+    // asking for, and without it turn 1's time-to-first-token would include the
+    // preface prefill and read as a slow runtime.
+    const tokenCount = await conversation.getTokenCount();
     log.info("conversation created", {
       systemPromptBakedIn: Boolean(system),
       historyOwner:
         "the Conversation. Like Chrome, unlike web-llm/wllama/Transformers.js — we must NOT resend messages.",
-      tokenCount: await conversation.getTokenCount(),
+      wrapper: tools ? "AutoToolChat" : "Conversation",
+      toolsDeclared: tools ? tools.declarations.map((d) => d.name) : [],
+      // Left OFF deliberately. It is the switch the `Schema` type exists for,
+      // and upstream #2434 — "Invalid token at state 201" after a tool_response
+      // — is open against exactly this combination on the web build, where a
+      // second decode round throws. Constrained decoding buys reliability on
+      // the first call and costs every call after it.
+      enableConstrainedDecoding: false,
+      tokenCount,
     });
 
     return {
       engine,
       conversation,
       conversationConfig,
+      autoToolChat: Boolean(tools),
       discoveredContext: settingsContext,
       // The controller uses this to suppress its chunks-per-second figure: on
       // CPU the whole reply arrives in one burst at the end, so the rate is an
@@ -383,6 +441,7 @@ export default {
     prompt,
     system,
     json,
+    tools,
     onChunk,
     stats,
     wire,
@@ -401,6 +460,21 @@ export default {
       );
     }
 
+    // Same shape of warning as the system prompt above, and for the same reason:
+    // `preface.tools` is construction-time state. Compared on the DECLARATION
+    // rather than the source, because `execute` reaches the current parse
+    // through a ref — so editing the function's body takes effect on the next
+    // turn, and renaming it or changing its parameters does not.
+    const wantedTools = tools ? JSON.stringify(tools.declarations) : null;
+    if (wantedTools !== bakedTools) {
+      log.warn(
+        bakedTools === null
+          ? "A tool is declared, but this conversation was built without one — `preface.tools` is fixed at load. Unload and load to declare it."
+          : "The tool declaration changed, but it is fixed in the conversation preface. This turn uses the one baked in at load; unload and load to change the name or the parameters. Edits to the function body do apply.",
+        { baked: bakedTools, requested: wantedTools },
+      );
+    }
+
     // Only the new turn goes over the wire. The Conversation holds the history
     // inside the WASM, so the controller's `messages` is deliberately unused —
     // and that divergence is one of the findings.
@@ -413,6 +487,7 @@ export default {
 
     const stream = handle.conversation.sendMessageStreaming(prompt);
     const reader = stream.getReader();
+    let cancelled = false;
 
     let thoughtChars = 0;
     let contentChars = 0;
@@ -425,6 +500,7 @@ export default {
       // leaves isBusy true, and every later turn throws
       // 'Conversation is busy. A generation is already in progress.' for the life
       // of the page.
+      cancelled = true;
       log.info("reader.cancel() — cancels generation and clears isBusy");
       reader.cancel("stopped by user").catch(() => {});
     };
@@ -499,6 +575,11 @@ export default {
         backend: handle.backendName,
         historyResentByUs: false,
         jsonConstrained: false,
+        toolsDeclared: bakedTools ? JSON.parse(bakedTools).length : 0,
+        // The runtime ran them, so this page did not count them here — the
+        // controller's record, fed by onToolProgress and by the execute
+        // closure, is the count.
+        toolsRunByRuntime: handle.autoToolChat === true,
         runtimeReportsItsOwnRates: true,
         rawBenchmarkInfo: bench,
       });
@@ -506,6 +587,37 @@ export default {
       if (thoughtChars > 0 && contentChars === 0) {
         log.warn(
           `All ${thoughtChars} chars arrived on channels.thought and no answer followed — the turn ran out of budget mid-thought despite enable_thinking: false.`,
+        );
+      }
+
+      // A DEFECT IN AutoToolChat, and it is terminal without this. Its stream's
+      // cancel handler sets isStreamCancelled and calls this.cancel(), and
+      // neither path ever sets `isBusy` back to false — read off
+      // dist/orchestration/auto_tool_chat.js, where isBusy is cleared only on
+      // controller.close() and controller.error(). So a stopped tool turn
+      // leaves the wrapper permanently busy and every later turn throws
+      // 'Conversation is busy. A generation is already in progress.'
+      //
+      // There is no way to reach the flag, so the wrapper is replaced. delete()
+      // frees the base conversation it was holding — which is the cost, and it
+      // is real: the model's history goes with it, while the transcript on
+      // screen stays. Said out loud rather than papered over.
+      if (cancelled && handle.autoToolChat) {
+        log.warn(
+          "Stopping a tool-calling turn leaves AutoToolChat's `isBusy` set — its cancel path never clears it — so the wrapper is being replaced. The conversation history inside the runtime is lost with it; the transcript on this page is not.",
+        );
+        try {
+          await handle.conversation.delete();
+        } catch (err) {
+          log.warn("delete() on the cancelled AutoToolChat threw", {
+            message: String(err),
+          });
+        }
+        handle.conversation = newAutoToolChat(
+          handle.engine,
+          handle.conversationConfig,
+          tools,
+          log,
         );
       }
     }
@@ -524,9 +636,13 @@ export default {
   resetConversation: async ({ handle, log }) => {
     const before = await handle.conversation.getTokenCount().catch(() => null);
     await handle.conversation.delete();
-    const conversation = await handle.engine.createConversation(
-      handle.conversationConfig,
-    );
+    // AutoToolChat nulls its base conversation on delete() and builds another
+    // on the next call, so the same wrapper IS the reset — no new object is
+    // needed and the tool declarations survive untouched. The plain
+    // Conversation has to be rebuilt from the config it was made with.
+    const conversation = handle.autoToolChat
+      ? handle.conversation
+      : await handle.engine.createConversation(handle.conversationConfig);
     log.info(
       "conversation deleted and re-created — history, KV cache and token count reset",
       {
@@ -535,6 +651,7 @@ export default {
         systemPromptReapplied: Boolean(
           handle.conversationConfig?.preface?.messages,
         ),
+        toolsReapplied: handle.autoToolChat,
       },
     );
     return { ...handle, conversation };
@@ -560,6 +677,7 @@ export default {
       log.error("engine.delete() threw", { message: String(err) });
     }
     bakedSystem = null;
+    bakedTools = null;
 
     // Deliberately NOT called: unloadLiteRtLm() would drop the WASM module too,
     // costing a 19-31 MiB re-download on the next load. So "unloaded" here means

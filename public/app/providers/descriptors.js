@@ -54,6 +54,60 @@ export const JSON_INSTRUCTION = `Reply with a single JSON object matching this s
 )}`;
 
 // ---------------------------------------------------------------------------
+// Tool calling.
+// ---------------------------------------------------------------------------
+
+/**
+ * The tool a reader starts with.
+ *
+ * Choosing it took three tries and the two rejects are the reason this comment
+ * is worth the space, because both failed for reasons that are properties of
+ * small models rather than of this page.
+ *
+ *   `add(a, b)` — called reliably, but both arguments are already digits in the
+ *   question, so nothing is extracted, and the model can do the sum itself:
+ *   asked for 81724 + 59318, wllama/Qwen3.5-0.8B and Gemini Nano both answered
+ *   141042 unaided.
+ *
+ *   `countLetter(word, letter)` — never called. 0 of 3 runs, even with a
+ *   description saying to prefer it over counting by hand. A model that
+ *   believes it can do the job does not delegate, and this one believes it:
+ *   it answered 2, 2 and 1 for the r's in "strawberry".
+ *
+ *   A lookup — called in 2 of 3 runs, and the run that did not call it replied
+ *   "I don't have access to the current real-time weather data", which is the
+ *   same finding from the other side. THAT is the trigger: a model reaches for
+ *   a tool when it knows it cannot answer without one, not when the tool would
+ *   merely be more accurate.
+ *
+ * So: a lookup, with a string argument the model has to lift out of the
+ * question and a string result it could not have guessed. The body is a
+ * constant and visibly so — the point on screen is whether the runtime routed
+ * the call, never what the weather in Tokyo is.
+ */
+export const DEFAULT_TOOL_SOURCE = `// Look up the current weather in a city.
+const weather = (city: string) => \`\${city}: 21C, raining\`;`;
+
+/**
+ * A question the default tool answers and the model cannot.
+ *
+ * Offered as a button rather than written into the prompt box, because a tool
+ * and a question have to match before a model will reach for anything: leave
+ * the page's default question about bikeshedding in place and a
+ * correctly-behaving model declines to call a weather tool, which reads as a
+ * broken feature. One click rather than a silent rewrite of what was typed.
+ */
+export const DEFAULT_TOOL_PROMPT = "What is the weather in Tokyo right now?";
+
+/**
+ * How many times a turn may go model → tool → model before the adapter gives
+ * up. Every runtime that closes the loop needs a ceiling, because a model that
+ * calls the same tool forever is a real failure mode and not a rare one; the
+ * wllama example upstream uses 5 and LiteRT-LM defaults to 25.
+ */
+export const MAX_TOOL_ROUNDS = 4;
+
+// ---------------------------------------------------------------------------
 
 export const DESCRIPTORS = [
   // -------------------------------------------------------------------------
@@ -97,6 +151,18 @@ export const DESCRIPTORS = [
       supported: true,
       field: "responseConstraint",
       note: "`responseConstraint` takes a JSON Schema object per call.",
+    },
+    // The one runtime of the five where the tool option is specified and not
+    // implemented — and where passing it produces no error, because an unknown
+    // member of a WebIDL dictionary is dropped rather than refused. Hence the
+    // probe in the adapter: `expectedOutputs: [{ type: "tool-call" }]` is the
+    // one form Chrome does reject, so it answers the question a silently
+    // ignored option cannot.
+    tools: {
+      kind: "none",
+      appliedAt: "load",
+      field: "tools",
+      note: "The explainer specifies a `tools` option whose entries carry an `execute()` the browser calls. Chrome does not ship it — chromestatus lists Function Calling in the Prompt API as Proposed with no milestone and no origin trial — and `create()` drops an option it does not know rather than refusing it.",
     },
     progress: {
       kind: "native",
@@ -183,6 +249,30 @@ export const DESCRIPTORS = [
       // TYPES 0.2.84 chat_completion.d.ts: ResponseFormat.schema is `string`,
       // not an object — an unstringified schema is silently wrong.
       note: "The schema is a JSON string here, not an object. `grammar` (EBNF) and `structural_tag` modes also exist.",
+    },
+    // TYPES 0.2.84 chat_completion.d.ts documents `tools` and `tool_choice` in
+    // full OpenAI shape, but the library's own request validation is where the
+    // real contract is: `tools` is checked against a five-entry allowlist of
+    // model ids, and for those it rewrites `response_format` and prepends a
+    // system message of its own — throwing if the caller supplied either. The
+    // adapter drops both rather than letting the throw happen.
+    tools: {
+      kind: "parsed",
+      appliedAt: "turn",
+      field: "tools, tool_choice",
+      note: "OpenAI-shaped, and restricted to five model ids: the Hermes-2-Pro and Hermes-3 builds, all 7B or 8B. Any other id throws `UnsupportedModelIdError`. On those five, supplying a system prompt or a `response_format` of your own also throws, because the library writes both itself.",
+      // Straight out of the 0.2.84 bundle's own request validation — `if
+      // (request.tools) { if (!FUNCTION_CALLING_MODELS.includes(modelId)) throw
+      // UnsupportedModelIdError }` — and not from the docs, which mention no
+      // restriction at all. It lives here rather than in the adapter because the
+      // UI has to mark which models can do this before any bundle is fetched.
+      modelAllowlist: [
+        "Hermes-2-Pro-Llama-3-8B-q4f16_1-MLC",
+        "Hermes-2-Pro-Llama-3-8B-q4f32_1-MLC",
+        "Hermes-2-Pro-Mistral-7B-q4f16_1-MLC",
+        "Hermes-3-Llama-3.1-8B-q4f32_1-MLC",
+        "Hermes-3-Llama-3.1-8B-q4f16_1-MLC",
+      ],
     },
     progress: {
       kind: "native",
@@ -273,6 +363,19 @@ export const DESCRIPTORS = [
       // TYPES 3.6.0 esm/types/oai-compat.d.ts. `schema` is `unknown` here — an
       // object, where web-llm's same-named field wants a string.
       note: "The schema is an object here, unlike web-llm. This is a pass-through to llama-server.",
+    },
+    // TYPES 3.6.0 esm/types/oai-compat.d.ts, and the shape is llama-server's
+    // verbatim — `tools` and `tool_choice` on the request, `delta.tool_calls`
+    // in fragments keyed by `index`, `finish_reason: 'tool_calls'`. The whole
+    // options object is JSON.stringify'd into the WASM, so the parsing happens
+    // in llama.cpp against the GGUF's own template and no flag turns it on:
+    // upstream's examples/tools/index.html loads with nothing but a progress
+    // callback.
+    tools: {
+      kind: "parsed",
+      appliedAt: "turn",
+      field: "tools, tool_choice",
+      note: "OpenAI-shaped, passed through to llama-server, which parses the call out of the GGUF's own chat template — so whether it works is the model's property, not the runtime's. `delta.tool_calls` arrives in fragments keyed by `index`, and `finish_reason` becomes `tool_calls`.",
     },
     progress: {
       kind: "native",
@@ -383,6 +486,20 @@ export const DESCRIPTORS = [
       // is `constraints: any[]`, the port of transformers' beam-search Constraint
       // objects — token forcing, not grammar-constrained decoding.
       note: "No grammar or JSON-schema decoding. GenerationConfig offers only `constraints`, which forces tokens during beam search and cannot enforce a shape.",
+    },
+    // The interesting middle case. `tools` is real — TextGenerationPipeline has
+    // taken it since 4.2.0 (#1655) — but it is an `apply_chat_template`
+    // argument and nothing more. There is no tool-call type, no `finish_reason`
+    // and no parser anywhere in the package: the reply comes back as text with
+    // whatever the template's tool syntax looks like embedded in it, and
+    // turning that back into a call is the caller's job. So this page declares
+    // the tool and shows what came back, rather than hand-rolling a parser and
+    // implying the runtime did it.
+    tools: {
+      kind: "template",
+      appliedAt: "turn",
+      field: "tools",
+      note: "`tools` reaches `apply_chat_template` and stops there. The docs say it has no effect unless the model's template supports tool use, and nothing in the package parses a call back out — the reply is text, and reading a call out of it is yours to write.",
     },
     progress: {
       kind: "native",
@@ -495,6 +612,23 @@ export const DESCRIPTORS = [
       // is used only by FunctionDeclaration, and enableConstrainedDecoding is a
       // ConversationConfig switch for that tool path.
       note: "No per-turn structured output. `sendMessageStreaming()` takes no options, and the `Schema` type applies to tool declarations only.",
+    },
+    // The most complete of the five, and the reason the `Schema` type exists at
+    // all. `preface.tools` puts declarations in the conversation — so they are
+    // fixed at load, exactly like the system prompt — and `AutoToolChat` wraps
+    // a conversation to run `execute` itself between decode rounds, reporting
+    // each through `onToolProgress`. Nobody else here closes the loop.
+    //
+    // Two caveats live in code rather than in this string, because they are
+    // behaviour rather than API: upstream #2434 (multi-turn tool calling fails
+    // on web with `enableConstrainedDecoding: true`, which is why it stays off)
+    // and AutoToolChat's own cancel path, which never clears `isBusy` — see
+    // providers/litert.js.
+    tools: {
+      kind: "parsed",
+      appliedAt: "load",
+      field: "preface.tools",
+      note: "Declared in the conversation preface, so they are fixed at load like the system prompt. `AutoToolChat` wraps a conversation and calls `execute` itself — in parallel, waiting for all of them before waking the model — which makes this the only one of the five that closes the loop for you.",
     },
     progress: {
       kind: "handrolled",

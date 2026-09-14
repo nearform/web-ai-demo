@@ -42,12 +42,15 @@ import { loadAdapter, getDescriptor } from "../providers/index.js";
 import { readDeepLink, writeDeepLink } from "../util/deeplink.js";
 import { jsonSafe } from "../util/wire.js";
 import { parseCustomModel } from "../util/custom-model.js";
+import { parseToolFunction, toolDeclaration } from "../util/tool-fn.js";
 import {
   DEFAULT_SYSTEM,
   DEFAULT_PROMPT,
   MAX_REPLY_TOKENS,
   JSON_SCHEMA,
   JSON_INSTRUCTION,
+  DEFAULT_TOOL_SOURCE,
+  MAX_TOOL_ROUNDS,
 } from "../providers/descriptors.js";
 
 // Errors are the product here. Capture name, message and stack verbatim — the
@@ -135,6 +138,8 @@ export const useRuntime = () => {
   const [system, setSystem] = useState(DEFAULT_SYSTEM);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [jsonMode, setJsonMode] = useState(false);
+  const [toolsMode, setToolsMode] = useState(false);
+  const [toolSource, setToolSource] = useState(DEFAULT_TOOL_SOURCE);
   const [turns, setTurns] = useState([]);
   const [streaming, setStreaming] = useState(null);
   const [events, setEvents] = useState([]);
@@ -189,6 +194,84 @@ export const useRuntime = () => {
     }),
     [log],
   );
+
+  // --- the reader's tool ----------------------------------------------------
+  // Parsed on every edit rather than on use, because the panel renders the
+  // derived declaration as you type and a parse error has to appear in the
+  // field that caused it. The parse evaluates the source to get a callable —
+  // see util/tool-fn.js — so a source with a top-level side effect runs per
+  // keystroke. Defining a function, which is what this field is for, has none.
+  const tool = useMemo(() => parseToolFunction(toolSource), [toolSource]);
+  const toolsActive = toolsMode && tool.ok;
+
+  // The calls made during the turn now in flight. A ref, not state, for two
+  // reasons: they arrive from inside an adapter's stream loop where a render
+  // per call would be the same mistake as a render per chunk, and on LiteRT-LM
+  // the executing closure was bound at LOAD time and has no idea which turn it
+  // is running under. The turn record reads this when it is built.
+  const toolCallsRef = useRef([]);
+  // The latest parse, reachable from a closure that outlives the render that
+  // made it. LiteRT-LM bakes tool declarations into the conversation preface at
+  // load, so its `execute` is years old by the time the model calls it; going
+  // through the ref means an edit to the function BODY takes effect without a
+  // reload, while a change to the declaration still does not — which is exactly
+  // the true story, and the adapter says so.
+  const toolRef = useRef(tool);
+  toolRef.current = tool;
+
+  // What an adapter is handed: the declarations to send, and one function to
+  // call when the model asks. Every runtime's loop differs — who parses the
+  // call, how the result is fed back, whether it loops at all — so the loop
+  // itself belongs to the adapter and this is only the two things all of them
+  // need.
+  const makeToolPayload = useCallback(() => {
+    if (!toolsActive) return null;
+    return {
+      declarations: [toolDeclaration(tool)],
+      maxRounds: MAX_TOOL_ROUNDS,
+      /**
+       * Run the tool. Never throws: a tool that blew up is a result the model
+       * should see and the reader should read, not a way to kill the turn — so
+       * the error is returned as the tool's output and recorded as one.
+       */
+      call: async (name, args) => {
+        const current = toolRef.current;
+        const started = performance.now();
+        const record = {
+          name,
+          args: jsonSafe(args),
+          result: null,
+          error: null,
+        };
+        try {
+          if (!current?.ok || name !== current.name) {
+            throw new Error(
+              `No tool named "${name}" is declared. This page declares one: ${current?.name ?? "(none)"}.`,
+            );
+          }
+          record.result = await current.call(args);
+        } catch (err) {
+          record.error = describeError(err).message;
+        }
+        record.ms = Math.round(performance.now() - started);
+        toolCallsRef.current = [...toolCallsRef.current, record];
+        log(
+          record.error ? "warn" : "info",
+          record.error
+            ? `tool ${name}() threw: ${record.error}`
+            : `tool ${name}() returned ${JSON.stringify(record.result)} in ${record.ms}ms`,
+          record,
+        );
+        // The model gets a string either way. Every one of these APIs wants the
+        // tool's output as message content, and a number that arrives as a
+        // number in one and a JSON string in another would be a difference
+        // between runtimes that this page invented rather than found.
+        return record.error
+          ? { error: record.error }
+          : { result: record.result };
+      },
+    };
+  }, [toolsActive, tool, log]);
 
   // --- deep links -----------------------------------------------------------
   // What the query string did, or failed to do, said out loud. A reader who was
@@ -570,6 +653,10 @@ export const useRuntime = () => {
         system,
         context,
         replyCap,
+        // Offered to every adapter, used by the two that bind tools at create
+        // time — LiteRT-LM in `preface.tools`, Chrome in `create({ tools })`.
+        // The other three ignore it here and take the same payload per turn.
+        tools: makeToolPayload(),
         log: logger,
         progress: reportProgress,
       });
@@ -628,6 +715,7 @@ export const useRuntime = () => {
     system,
     context,
     replyCap,
+    makeToolPayload,
     logger,
     log,
     applyStatus,
@@ -684,16 +772,37 @@ export const useRuntime = () => {
     // works — web-llm's own docs warn that a constrained model with no
     // instruction can emit an unending stream of whitespace until it hits the
     // token cap, which reads as a hang and is really a well-formed empty object.
-    const effectivePrompt = jsonMode
+    //
+    // Not applied when a tool is in play: on web-llm the two are mutually
+    // exclusive by construction — the library writes `response_format` itself
+    // for tool calls and throws if the caller supplied one — and on the rest a
+    // "reply as JSON and nothing else" instruction is direct competition for
+    // the tool-call syntax the template is trying to get the model to emit.
+    const jsonThisTurn = jsonMode && !toolsActive;
+    const effectivePrompt = jsonThisTurn
       ? `${asked}\n\n${JSON_INSTRUCTION}`
       : asked;
+    if (jsonMode && toolsActive) {
+      log(
+        "warn",
+        "JSON mode is on but a tool is declared, so this turn goes out without it — the schema instruction and the tool-call syntax are asking the model for two different shapes, and web-llm refuses the combination outright.",
+      );
+    }
 
     messagesRef.current = [
       ...messagesRef.current,
       { role: "user", content: effectivePrompt },
     ];
     const turn = messagesRef.current.filter((m) => m.role === "user").length;
-    setTurns((t) => [...t, { role: "user", text: asked, jsonMode, turn }]);
+    setTurns((t) => [
+      ...t,
+      { role: "user", text: asked, jsonMode: jsonThisTurn, toolsActive, turn },
+    ]);
+
+    // Reset before the turn, read after it. Calls land here from inside the
+    // adapter — and on LiteRT-LM from a closure created at load — so this is the
+    // only place that knows which turn they belonged to.
+    toolCallsRef.current = [];
 
     streamRef.current = "";
     setStreaming({ text: "" });
@@ -751,7 +860,13 @@ export const useRuntime = () => {
         chunksPerSecondWithheld: !streamsIncrementally,
         runtimeReportedStats: runtimeStats,
         aborted,
-        jsonRequested: jsonMode,
+        jsonRequested: jsonThisTurn,
+        toolRequested: toolsActive,
+        // The calls that actually happened, which is the only claim worth
+        // making: declaring a tool and the model reaching for it are two
+        // different events, and on three of the five runtimes the second one
+        // routinely does not follow the first.
+        toolCalls: toolCallsRef.current,
         // Whether the reply is usable prose, as a number rather than an
         // impression. See lib/quality.js.
         quality: textQuality(text),
@@ -819,7 +934,11 @@ export const useRuntime = () => {
         system,
         turn,
         replyCap,
-        json: jsonMode ? { schema: JSON_SCHEMA } : null,
+        json: jsonThisTurn ? { schema: JSON_SCHEMA } : null,
+        // Same payload the load was given. The three that take tools per turn
+        // read it here; LiteRT-LM already has it and uses this only to notice
+        // that the declaration changed since the conversation was built.
+        tools: makeToolPayload(),
         log: logger,
         signal: controller.signal,
         onChunk: (chunk) => {
@@ -911,6 +1030,8 @@ export const useRuntime = () => {
     prompt,
     ensureLoaded,
     jsonMode,
+    toolsActive,
+    makeToolPayload,
     providerId,
     model,
     system,
@@ -1017,6 +1138,14 @@ export const useRuntime = () => {
         system,
         jsonMode,
         jsonEnforced: jsonMode ? Boolean(descriptor?.json?.supported) : null,
+        toolsMode,
+        // The source verbatim, not a summary: a tool that did not fire is a
+        // question about what was declared, and the declaration is derived from
+        // this text by rules that are themselves worth checking.
+        toolSource: toolsMode ? toolSource : null,
+        toolDeclaration: toolsMode ? toolDeclaration(tool) : null,
+        toolParseError: toolsMode && !tool.ok ? tool.error : null,
+        toolSupport: descriptor?.tools?.kind ?? null,
       },
       status,
       statusDetail,
@@ -1052,6 +1181,9 @@ export const useRuntime = () => {
       replyCap,
       system,
       jsonMode,
+      toolsMode,
+      toolSource,
+      tool,
       status,
       statusDetail,
       device,
@@ -1095,6 +1227,44 @@ export const useRuntime = () => {
     [descriptor, log],
   );
 
+  // Unlike JSON mode, this is NOT switched off when the runtime cannot do it.
+  // JSON mode had to be, because a reply that parses looks enforced whether it
+  // was or not, and leaving the toggle on would have made a silent downgrade
+  // invisible. Here the opposite holds: Chrome accepting `tools` and ignoring
+  // them, and Transformers.js putting them in the template with nobody to read
+  // the call back out, ARE the comparison. So the toggle stays and the log says
+  // what this runtime will do with it.
+  const toggleToolsMode = useCallback(
+    (next) => {
+      setToolsMode(next);
+      if (!next) return;
+      const kind = descriptor?.tools?.kind;
+      const [level, message] = {
+        parsed: [
+          "info",
+          `Tool calling on. ${descriptor?.name} takes declarations in \`${descriptor?.tools?.field}\` and reports the call back as data${
+            descriptor?.tools?.appliedAt === "load"
+              ? " — fixed at load, so the declaration in force is the one the conversation was built with"
+              : ""
+          }.`,
+        ],
+        template: [
+          "warn",
+          `Tool calling on, but ${descriptor?.name} only puts the declarations in the chat template. Nothing parses a call back out, so the tool will not run — what comes back is text.`,
+        ],
+        none: [
+          "warn",
+          `Tool calling on, but ${descriptor?.name} has no tool option that ships. It will be sent and dropped; the adapter probes for it at load and reports what it found.`,
+        ],
+      }[kind] ?? ["warn", "Tool calling on."];
+      log(level, message);
+      if (!tool.ok) {
+        log("warn", `The tool function does not parse: ${tool.error}`);
+      }
+    },
+    [descriptor, tool, log],
+  );
+
   return {
     // identity
     providerId,
@@ -1129,6 +1299,11 @@ export const useRuntime = () => {
     setPrompt,
     jsonMode,
     setJsonMode: toggleJsonMode,
+    toolsMode,
+    setToolsMode: toggleToolsMode,
+    toolSource,
+    setToolSource,
+    tool,
     // output
     turns,
     streaming,

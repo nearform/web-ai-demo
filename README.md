@@ -15,6 +15,10 @@ and compare.
 | [Transformers.js](https://huggingface.co/docs/transformers.js)       | ONNX Runtime Web                    | Any, WebGPU optional |
 | [LiteRT-LM](https://developers.google.com/edge/litert-lm/js)         | Google's on-device LLM runtime      | Needs WebGPU         |
 
+The page compares them on eleven axes — history ownership, system prompt, context
+control, enforced JSON, **tool calling**, cancellation and the rest — in a table
+under _Capabilities_.
+
 _Note_: `@litert-lm/core` (LiteRT-LM) is not `@litertjs/core` (LiteRT.js), which
 runs general `.tflite` models rather than LLMs.
 
@@ -29,6 +33,47 @@ npm run dev     # http://localhost:4710/public/
 `Ask` downloads and loads the model on first use, so a first answer takes one
 click. The page reports what each runtime supports as you go, along with a device
 probe, per-turn timings, and a log you can copy.
+
+### Tool calling
+
+The **Tool** toggle beside Ask declares one function to the model and runs it when
+the model asks for it. The function is yours, editable, and defaults to a lookup:
+
+```js
+// Look up the current weather in a city.
+const weather = (city: string) => `${city}: 21C, raining`;
+```
+
+A lookup rather than something like `add(a, b)` on purpose. A small model reaches
+for a tool when it knows it cannot answer without one — not when the tool would
+merely be more accurate. Measured on Qwen3.5-0.8B: this one is called in roughly
+two runs of three, and the run that does not call it says it has no access to live
+weather, which makes the same point from the other side. A letter-counting tool
+was never called at all, because the model believes it can count letters (it
+cannot). There is a button beside the field that puts a matching question in the
+prompt box, since a tool and a question that disagree produce no call and look
+like a broken feature.
+
+A JSON Schema is derived from the signature and shown beside it, since the model
+is given the schema and not the source. Parameter types come from the two rules
+the panel states: a TypeScript-style annotation wins (`(name: string)`), and
+anything unannotated is a `number`. A leading `//` comment becomes the tool's
+description. The page evaluates what you type, in your own tab; nothing is sent
+anywhere.
+
+The five do not agree, and that is the point:
+
+| Runtime           | What happens                                                                                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chrome Prompt API | Nothing. `tools` is in the explainer, not in Chrome — and an unknown option is dropped silently, so the adapter probes for it and reports.                                   |
+| web-llm           | Works, on **five model ids only** — the Hermes builds, 7B and 8B. Any other id throws, and the page says so instead.                                                         |
+| wllama            | Works. `tools` passes through to llama-server, which parses the call out of the GGUF's own template.                                                                         |
+| Transformers.js   | The declarations reach `apply_chat_template` and stop there. Nothing parses a call back out, so nothing runs — you get the model's tool-call syntax as text.                 |
+| LiteRT-LM         | Works, and it is the only one that closes the loop itself: `AutoToolChat` calls your function between decode rounds. Declarations are fixed at load, like the system prompt. |
+
+Calls that happen appear above the reply with their arguments, result and timing,
+and every round trip shows in the **verbatim** panel — one request per round, so
+you can read the `tool` message going back.
 
 ### Linking to a runtime
 

@@ -1025,3 +1025,84 @@
   font-size: 0.72rem;
   color: var(--color-text-muted);
 }
+
+/* ------------------------------------------------------------ tool calling */
+
+/* The tool editor sits under the button row, in the same place the JSON note
+   does, and only while the toggle is on. Indented to the same gutter as the run
+   stats so it reads as belonging to the controls above it rather than to the
+   prompt. */
+.tool-editor {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* A function is code, so it gets the mono face and no autocorrect. Tabs would
+   leave the field, so indentation here is whatever was typed or pasted. */
+.control-input--code {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.tool-schema {
+  margin: 6px 0 2px;
+}
+
+.tool-schema > summary {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+/* The calls themselves, between the question and the answer. One row each, and
+   deliberately noisy: the whole point of the toggle is whether this block
+   appears at all. */
+.tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.tool-call {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--color-good-bg);
+  color: var(--color-good);
+  /* An argument list can be long; it wraps rather than pushing the result and
+     the timing off the edge on a phone. */
+  overflow-wrap: anywhere;
+}
+
+.tool-call--bad {
+  background: var(--color-bad-bg);
+  color: var(--color-bad);
+}
+
+.tool-call-name {
+  font-weight: 600;
+}
+
+.tool-call-arrow {
+  opacity: 0.6;
+}
+
+.tool-call-result {
+  font-weight: 600;
+}
+
+.tool-call-ms {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-weight: 400;
+}

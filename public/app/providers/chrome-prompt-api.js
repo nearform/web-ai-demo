@@ -28,10 +28,62 @@
 // showing one is dated 2025-02-28 and is stale. A system prompt is a `system`
 // role entry in `initialPrompts`, which means it is fixed at create() time.
 
-// Session-scoped, not module-scoped where it can be helped: these two exist only
+// Session-scoped, not module-scoped where it can be helped: these exist only
 // because the values have to survive from load() to generate().
 let overflowCount = 0;
 let systemAtCreate = null;
+let toolsAtCreate = null;
+// Whether load() was ASKED for tools, as distinct from whether it got any. The
+// two differ on every Chrome that ships today, and only the first answers "did
+// the reader flip the toggle after loading" — which is the one case where
+// reloading would change anything.
+let toolsRequestedAtCreate = false;
+
+// A tool as the explainer declares it: `inputSchema`, not `parameters`, and an
+// `execute` the BROWSER calls rather than a call reported back to the page.
+// Written to the spec even though nothing reads it yet, because a shape invented
+// here would be a third thing that is neither what Chrome will take nor what the
+// other four take.
+const toolEntriesFor = (tools) =>
+  tools.declarations.map((d) => ({
+    name: d.name,
+    description: d.description,
+    inputSchema: d.parameters,
+    execute: (args) => tools.call(d.name, args).then((r) => JSON.stringify(r)),
+  }));
+
+/**
+ * Does this Chrome have tool use, or does it only accept the option?
+ *
+ * The two are not the same question and the obvious test cannot tell them
+ * apart: `tools` is a dictionary member, so a Chrome that has never heard of it
+ * drops it and returns a perfectly good session. What Chrome *does* reject is
+ * an `expectedOutputs` entry of type `tool-call`, because that goes through an
+ * enum. So the presence of the whole feature is read off the one part of it
+ * that fails loudly.
+ *
+ * Costs one create()/destroy() against a model that is already resident, and
+ * only when tools were asked for.
+ */
+const probeToolSupport = async (log) => {
+  try {
+    const probe = await LanguageModel.create({
+      expectedInputs: [{ type: "tool-response" }],
+      expectedOutputs: [{ type: "tool-call" }],
+    });
+    probe.destroy?.();
+    log.info(
+      'expectedOutputs: [{ type: "tool-call" }] was accepted — this Chrome knows the tool-use types.',
+    );
+    return { accepted: true, error: null };
+  } catch (err) {
+    log.warn(
+      `Tool use is not implemented in this Chrome. create() with expectedOutputs [{ type: "tool-call" }] threw ${err.name}, and the \`tools\` option itself is accepted and dropped — an unknown dictionary member is not an error. The declarations below go out and nothing will read them.`,
+      { name: err.name, message: String(err.message ?? err) },
+    );
+    return { accepted: false, error: { name: err.name, message: String(err) } };
+  }
+};
 
 // Stage one of overflow is silent eviction, so without this listener the
 // conversation quietly loses its oldest turns and nothing says why. The count is
@@ -82,8 +134,17 @@ export default {
     return { ok: true, detail: { availability, params } };
   },
 
-  load: async ({ system, log, progress }) => {
+  load: async ({ system, tools, log, progress }) => {
     systemAtCreate = system;
+
+    let toolSupport = null;
+    toolsRequestedAtCreate = Boolean(tools);
+    if (tools) {
+      toolSupport = await probeToolSupport(log);
+      toolsAtCreate = toolSupport.accepted ? tools.declarations : null;
+    } else {
+      toolsAtCreate = null;
+    }
 
     // initialPrompts is the only way in for a system prompt. monitor is called
     // synchronously with the monitor object, and downloadprogress gives e.loaded
@@ -92,6 +153,10 @@ export default {
       initialPrompts: system
         ? [{ role: "system", content: system }]
         : undefined,
+      // Sent whether or not the probe above found anything to receive it. An
+      // unknown dictionary member is dropped, so this costs nothing today and
+      // is the line that starts working on the Chrome that ships the option.
+      tools: tools ? toolEntriesFor(tools) : undefined,
       monitor(m) {
         m.addEventListener("downloadprogress", (e) => {
           progress(
@@ -119,6 +184,15 @@ export default {
       // Sampling knobs read undefined in a web page without the origin trial.
       temperature: session.temperature ?? null,
       topK: session.topK ?? null,
+      // Present only when tools were asked for, and the answer that matters:
+      // whether the session that came back knows anything about them.
+      ...(tools
+        ? {
+            toolsOptionPassed: true,
+            sessionToolsProperty: typeof session.tools,
+            toolCallOutputAccepted: toolSupport.accepted,
+          }
+        : {}),
     });
 
     return {
@@ -126,6 +200,7 @@ export default {
       // Surfaced to the UI so the context control can show a real number instead
       // of a blank. This is the only runtime that fills this in.
       discoveredContext: session.contextWindow ?? null,
+      toolsAccepted: toolSupport?.accepted ?? null,
     };
   },
 
@@ -134,6 +209,7 @@ export default {
     prompt,
     system,
     json,
+    tools,
     onChunk,
     stats,
     wire,
@@ -145,6 +221,18 @@ export default {
     if (systemAtCreate !== null && systemAtCreate !== system) {
       log.warn(
         "System prompt edited, but initialPrompts is fixed at create(). This turn uses the original; unload and load to change it.",
+      );
+    }
+
+    // Tools are a create() option here, like the system prompt and for the same
+    // reason — so the same warning applies, and it applies even though nothing
+    // is listening: turning the toggle on after loading changes nothing at all.
+    // Only when the toggle was flipped AFTER loading. When the session was
+    // created with tools and this Chrome dropped them, load() has already said
+    // so once and repeating it every turn adds nothing.
+    if (tools && !toolsRequestedAtCreate) {
+      log.warn(
+        "A tool is declared, but this session was created before the toggle was on and `tools` is a create() option. Nothing will call it this turn. Unload and load to apply it.",
       );
     }
 
@@ -200,6 +288,11 @@ export default {
         overflowEvents: overflowCount,
         historyResentByUs: false,
         jsonConstrained: Boolean(json),
+        // Declared, never called. Kept as two fields rather than one so the
+        // diagnostics distinguish "no tool was offered" from "a tool was
+        // offered and the runtime has no way to reach for it".
+        toolsDeclared: tools ? tools.declarations.length : 0,
+        toolCallsMade: 0,
         // No token rates exist on this API. Said out loud so a null in the
         // diagnostics reads as "not offered" rather than "we forgot to read it".
         runtimeReportsItsOwnRates: false,
@@ -220,6 +313,9 @@ export default {
       initialPrompts: systemAtCreate
         ? [{ role: "system", content: systemAtCreate }]
         : undefined,
+      // Whatever the original session was created with, so the replacement is
+      // the same session and not a subtly different one.
+      tools: toolsAtCreate ?? undefined,
     });
     watchOverflow(session, log);
     handle?.session?.destroy?.();
@@ -247,6 +343,8 @@ export default {
     // absent — into one the page cannot see.
     handle?.session?.destroy?.();
     systemAtCreate = null;
+    toolsAtCreate = null;
+    toolsRequestedAtCreate = false;
     overflowCount = 0;
     log.info(
       "session.destroy() returned — the model itself is Chrome's and stays on disk, unmeasurable from here",

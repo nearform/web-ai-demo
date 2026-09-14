@@ -244,9 +244,26 @@ export const useRuntime = () => {
           error: null,
         };
         try {
-          if (!current?.ok || name !== current.name) {
+          if (!current?.ok) {
             throw new Error(
-              `No tool named "${name}" is declared. This page declares one: ${current?.name ?? "(none)"}.`,
+              "The tool function does not parse, so nothing can run.",
+            );
+          }
+          // Dispatch on the ONE declared tool, not on the name that came back,
+          // because the name that comes back is not reliably the one we sent.
+          // MEASURED on web-llm 0.2.84 with Hermes-2-Pro-Mistral-7B: four runs
+          // declaring `weather` returned `weather_look_up`, `Weather in Tokyo`,
+          // `weather_in_Tokyo` and `function_call`. The arguments were correct
+          // every time; only the identifier drifted. The library parses Hermes'
+          // raw output into the OpenAI shape without checking the name against
+          // the declaration, so matching on it would fail every call.
+          //
+          // Reported rather than swallowed: a reader comparing runtimes should
+          // see that this one cannot be dispatched by name.
+          if (name !== current.name) {
+            log(
+              "warn",
+              `The model asked for "${name}" but the declared tool is "${current.name}". Running it anyway — only one tool is declared. Some runtimes do not echo the name they were given, so dispatching on it is not safe here.`,
             );
           }
           record.result = await current.call(args);

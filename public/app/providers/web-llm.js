@@ -328,6 +328,11 @@ export default {
         "System instructions are not sent on a tool-calling turn: web-llm prepends its own Hermes tool preamble as the system message and throws CustomSystemPromptError if the request already has one.",
       );
     }
+    if (toolModelOk) {
+      log.warn(
+        "`extra_body.enable_thinking: false` is also dropped for this turn. It does not remove the think block, it makes an empty one — and web-llm's own tool-call parser runs JSON.parse over the raw message and throws ToolCallOutputParseError on the leading `<`.",
+      );
+    }
 
     const payload = [
       ...(sendSystem ? [{ role: "system", content: system }] : []),
@@ -357,19 +362,53 @@ export default {
 
     const buildRequest = () => {
       const request = {
-        messages: payload,
+        // A COPY, not the array itself. `chat.completions.create` MUTATES the
+        // messages it is given on the Hermes tool path: it validates that no
+        // system message is present and then `unshift`s its own tool preamble
+        // in as one. Pass the same array twice and the second call throws
+        // CustomSystemPromptError over a message the library itself added.
+        //
+        // MEASURED 2026-09-14: round one succeeds, round two throws, and the
+        // error names a system prompt this adapter deliberately never sends.
+        messages: [...payload],
         stream: true,
         stream_options: { include_usage: true },
-        // Thinking is off everywhere in this demo — see MODELS.md. A small
-        // reasoning-capable model asked a simple question will otherwise spend its
-        // whole token budget deliberating and never reach an answer, which reads as
-        // a hang. web-llm's switch lives on extra_body; per its own docs, setting
-        // true or leaving it undefined does nothing, so this only ever suppresses.
-        extra_body: { enable_thinking: false },
         max_tokens: replyCap,
       };
 
-      if (toolModelOk) {
+      // Thinking is off everywhere in this demo — see MODELS.md. A small
+      // reasoning-capable model asked a simple question will otherwise spend its
+      // whole token budget deliberating and never reach an answer, which reads as
+      // a hang. web-llm's switch lives on extra_body; per its own docs, setting
+      // true or leaving it undefined does nothing, so this only ever suppresses.
+      //
+      // EXCEPT on a tool-calling turn, where it is actively fatal — and the
+      // mechanism is the library tripping over its own feature. Suppressing
+      // thinking does not remove the block; conversation.ts appends an EMPTY
+      // `<think></think>` header instead. The tool-call path then runs
+      // `JSON.parse` over the whole raw message, hits the `<`, and throws
+      // ToolCallOutputParseError before any tool_calls reach us.
+      //
+      // MEASURED 2026-09-14, Hermes-2-Pro-Mistral-7B, two runs each: omitted →
+      // parses; `enable_thinking: false` → throws; `enable_thinking: true` →
+      // parses. So the field is omitted here rather than negated.
+      if (!toolModelOk) {
+        request.extra_body = { enable_thinking: false };
+      }
+
+      // Only on the FIRST round. web-llm's function calling is not a native
+      // decode mode — it is prompt engineering: for a Hermes model the library
+      // swaps in a system preamble ("you are provided with function signatures
+      // within <tools></tools>… For each function call return a json object")
+      // and forces `response_format: json_object`. So while `tools` is present
+      // the model is being told, every turn, to answer in tool-call JSON.
+      //
+      // MEASURED 2026-09-14: resending `tools` with the tool result attached
+      // made Hermes-2-Pro-Mistral-7B emit the same call four times and hit the
+      // round cap without ever producing prose. Dropping it returns a sentence.
+      // This is the opposite of wllama, whose upstream example resends tools
+      // every round because there the parsing is the template's, not a preamble.
+      if (toolModelOk && requestsSent.length === 0) {
         request.tools = tools.declarations.map((d) => ({
           type: "function",
           function: d,
@@ -386,7 +425,7 @@ export default {
         // Hermes path and throws CustomResponseFormatError if one is already
         // there. The controller does not send both, and this guard is the second
         // lock on the same door.
-        if (toolModelOk) {
+        if (request.tools) {
           log.warn(
             "Dropping response_format for this turn: with `tools` set, web-llm writes its own and throws CustomResponseFormatError if the request carries one.",
           );
@@ -433,6 +472,14 @@ export default {
         // the shape upstream's own tool example uses.
         const collected = new Map();
         let finishReason = null;
+        // On a round where tools were sent, the content IS the tool call —
+        // Hermes emits `[{"arguments": …, "name": …}]` as ordinary content and
+        // the library parses that string into `tool_calls`. Streaming it would
+        // put raw JSON in the transcript above the real answer, so this round is
+        // buffered and only shown if it turns out not to have been a call.
+        // Every other round streams live, as before.
+        const buffered = Boolean(request.tools);
+        let roundText = "";
 
         for await (const chunk of chunks) {
           const choice = chunk.choices?.[0];
@@ -440,7 +487,8 @@ export default {
           const delta = choice?.delta?.content;
           if (delta) {
             raw += delta;
-            emit(delta);
+            roundText += delta;
+            if (!buffered) emit(delta);
           }
           for (const tc of choice?.delta?.tool_calls ?? []) {
             const entry = collected.get(tc.index) ?? {
@@ -460,6 +508,11 @@ export default {
         }
 
         const calls = [...collected.values()];
+        // Not a call after all: the model answered in prose on the round where
+        // it was offered the tool. Show what it said.
+        if (buffered && (finishReason !== "tool_calls" || calls.length === 0)) {
+          emit(roundText);
+        }
         // Both conditions, as the types document: a generation that ended for
         // any reason other than a completed stop returns no tool_calls at all,
         // so finish_reason is the gate and the collected list is the payload.

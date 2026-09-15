@@ -111,10 +111,11 @@ ${JSON.stringify(
     </div>
     <p className="control-note">
       A model reaches for a tool when it knows it cannot answer without one, so
-      the tool and the question have to match — that button puts
-      <em>“${DEFAULT_TOOL_PROMPT}”</em> in the prompt box. The default function
-      is a stub that returns the same string for every city; what is worth
-      watching is whether the call appears above the reply, not the forecast.
+      the tool and the question have to match — that button
+      puts${" "}<em>“${DEFAULT_TOOL_PROMPT}”</em>${" "}in the prompt box. The
+      default function is a stub that returns the same string for every city;
+      what is worth watching is whether the call appears above the reply, not
+      the forecast.
     </p>
     <p className="control-note">
       ${descriptor.tools.note} This page evaluates what you type, here in this
@@ -220,8 +221,7 @@ const RunStats = ({ run }) => {
       ${
         run.quality?.looksDegenerate
           ? html`<span className="run-stat run-stat--bad"
-              >degenerate:
-              ${
+              >degenerate:${" "}${
                 run.quality.degenerateReason ??
                 `distinct-3 ${run.quality.distinct3}`
               }</span
@@ -412,8 +412,7 @@ const Turn = ({ turn, descriptor, model, onShowWire }) => {
                   turn.wire.rawReported &&
                   turn.wire.raw.length !== turn.text.length
                     ? html`<span className="turn-flag"
-                        >${turn.wire.raw.length - turn.text.length}
-                        stripped</span
+                        >${turn.wire.raw.length - turn.text.length}${" "}stripped</span
                       >`
                     : null
                 }

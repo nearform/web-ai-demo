@@ -323,8 +323,9 @@ const ContextControl = ({
         clamped
           ? html`
               <p className="control-note control-note--bad">
-                Asked for ${context?.toLocaleString()}, runtime reported
-                ${discoveredContext.toLocaleString()} — it was clamped.
+                Asked for ${context?.toLocaleString()}, runtime
+                reported${" "}${discoveredContext.toLocaleString()} — it was
+                clamped.
               </p>
             `
           : null
@@ -502,9 +503,8 @@ export const RuntimePanel = ({ rt }) => {
         loaded
           ? html`
               <p className="control-note">
-                <strong>Unload frees:</strong>
-                ${descriptor.unload.frees.join(", ")}.
-                <strong>Keeps:</strong> ${descriptor.unload.keeps.join(", ")}.
+                <strong>Unload frees:</strong
+                >${" "}${descriptor.unload.frees.join(", ")}.${" "}<strong>Keeps:</strong>${" "}${descriptor.unload.keeps.join(", ")}.
               </p>
             `
           : null

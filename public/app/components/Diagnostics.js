@@ -17,21 +17,22 @@ export const CrashBanner = ({ recovered, onCopy }) =>
             Last heartbeat ${new Date(recovered.lastSeen).toISOString()}.
             ${
               recovered.snapshot?.provider
-                ? html` It was running
-                    <strong>${recovered.snapshot.provider}</strong>${
-                      recovered.snapshot.model
-                        ? html` on <code>${recovered.snapshot.model}</code>`
-                        : null
-                    }${
-                      recovered.snapshot.phase
-                        ? html`, during
-                            <strong>${recovered.snapshot.phase}</strong>`
-                        : null
-                    }.`
+                ? html`${" "}It was
+                  running${" "}<strong>${recovered.snapshot.provider}</strong>${
+                    recovered.snapshot.model
+                      ? html` on <code>${recovered.snapshot.model}</code>`
+                      : null
+                  }${
+                    recovered.snapshot.phase
+                      ? html`, during${" "}<strong
+                            >${recovered.snapshot.phase}</strong
+                          >`
+                      : null
+                  }.`
                 : null
-            }
-            The breadcrumb trail and the last recorded state are in the log and
-            in the copied diagnostics.
+            }${" "}The
+            breadcrumb trail and the last recorded state are in the log and in
+            the copied diagnostics.
           </div>
           <button type="button" className="btn btn--small" onClick=${onCopy}>
             Copy diagnostics now

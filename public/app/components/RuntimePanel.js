@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { html } from "../util/html.js";
+import { CACHED, ABSENT, cachedCount } from "../util/cache-probe.js";
 
 const STATUS_LABEL = {
   not_loaded: "not loaded",
@@ -9,6 +10,16 @@ const STATUS_LABEL = {
   error: "error",
 };
 
+// "cached" / "not cached" / nothing, as a suffix in the option text. An
+// <option> takes no markup, so a badge is not available here.
+//
+// Only the two states we can stand behind get a word. `unknown` — a storage API
+// we could not read, or an id whose filename the runtime resolves for itself —
+// renders as nothing at all, because a blank reads as "no information" and a
+// wrong "not cached" reads as "go download this again".
+const cacheSuffix = (state) =>
+  state === CACHED ? " · cached" : state === ABSENT ? " · not cached" : "";
+
 const ModelPicker = ({
   descriptor,
   models,
@@ -16,14 +27,43 @@ const ModelPicker = ({
   model,
   setModel,
   discoverModels,
+  cacheStates,
+  chromeAvailability,
   disabled,
 }) => {
-  // No picker: Chrome selects the variant.
+  // No picker: Chrome selects the variant. There is no cache to inspect either —
+  // the weights are the browser's — so availability() is the nearest equivalent
+  // and it is the only "will this cost a download" signal this runtime offers.
   if (descriptor.modelChoice.kind === "builtin") {
+    const AVAILABILITY = {
+      available: { text: "on this device already", tone: "ok" },
+      downloadable: { text: "not yet downloaded", tone: "bad" },
+      downloading: { text: "downloading now", tone: "" },
+      unavailable: { text: "unavailable on this device", tone: "bad" },
+    };
+    const a = AVAILABILITY[chromeAvailability];
     return html`
       <div className="control">
-        <span className="control-label">Model</span>
+        <span className="control-label">
+          Model
+          ${
+            a
+              ? html`<span className=${`control-flag control-flag--${a.tone}`}
+                  >${a.text}</span
+                >`
+              : null
+          }
+        </span>
         <p className="control-note">${descriptor.modelChoice.note}</p>
+        ${
+          chromeAvailability
+            ? html`<p className="control-note">
+                <code>LanguageModel.availability()</code> says${" "}
+                <code>${chromeAvailability}</code>. Chrome owns the weights, so
+                there is no cache here for the page to read.
+              </p>`
+            : null
+        }
       </div>
     `;
   }
@@ -71,6 +111,12 @@ const ModelPicker = ({
   }
 
   const selected = models?.find((m) => m.id === model);
+  const cached = cachedCount(cacheStates, models);
+  // Whether the probe could read this runtime's storage at all. All-unknown
+  // means it could not, and then the summary would say "0 of 5" about nothing.
+  const anyKnown = (models ?? []).some((m) =>
+    [CACHED, ABSENT].includes(cacheStates?.[m.id]),
+  );
   return html`
     <label className="control">
       <span className="control-label">Model</span>
@@ -85,11 +131,30 @@ const ModelPicker = ({
             <option key=${m.id} value=${m.id}>
               ${m.sizeMb ? `${m.label} — ${m.sizeMb} MB` : m.label}${
                 m.toolCapable ? " · tool calling" : ""
-              }
+              }${cacheSuffix(cacheStates?.[m.id])}
             </option>
           `,
         )}
       </select>
+      ${
+        // The summary, because the marker inside a closed <select> is only
+        // visible for whichever entry happens to be selected.
+        cached > 0 || anyKnown
+          ? html`<p className="control-note">
+              <strong
+                >${cached} of ${(models ?? []).length} already on this
+                device</strong
+              >${" "}— in ${descriptor.cache.store}, and kept when you
+              unload.${" "}
+              ${
+                // What "cached" is worth differs per runtime — one file or a
+                // hundred, completion marker or none — so the caveat lives in
+                // the descriptor beside the rest of the per-runtime strings.
+                descriptor.cache.completeness
+              }
+            </p>`
+          : null
+      }
       ${
         // Only where "which model" and "can it call a tool" are different
         // questions, which today is web-llm alone: its library accepts `tools`
@@ -364,6 +429,8 @@ export const RuntimePanel = ({ rt }) => {
         model=${rt.model}
         setModel=${rt.setModel}
         discoverModels=${rt.discoverModels}
+        cacheStates=${rt.cacheStates}
+        chromeAvailability=${rt.chromeAvailability}
         disabled=${lockedAtLoad}
       />
 

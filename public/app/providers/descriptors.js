@@ -168,6 +168,13 @@ export const DESCRIPTORS = [
       kind: "native",
       note: "`monitor` reports a `downloadprogress` event when Chrome has to fetch the model. Usually there is nothing to report.",
     },
+    // The only one where "is it cached" is not a question the page can ask.
+    cache: {
+      kind: "browser",
+      label: "the browser's",
+      tone: "good",
+      note: 'Chrome holds the weights and shares them across origins. No page-facing API stores, measures or frees them — `availability()` reporting "downloadable", "downloading" or "available" is the whole of what a page can see.',
+    },
     rates: {
       selfReported: false,
       note: "No token-rate API. `contextUsage` reports budget consumption instead, which the other four do not.",
@@ -278,6 +285,17 @@ export const DESCRIPTORS = [
       kind: "native",
       note: "`initProgressCallback` reports a fraction and a status line, covering compilation as well as download.",
     },
+    // The richest of the five, and the only one that caches a compile artifact
+    // separately from the weights — hence the three buckets.
+    cache: {
+      kind: "native",
+      label: "Cache Storage",
+      tone: "good",
+      store: "Cache Storage",
+      note: 'Three buckets: `webllm/model` for weights and tokenizer, `webllm/config` for mlc-chat-config.json, and `webllm/wasm` for the compiled shader library. `AppConfig.cacheBackend` also documents "indexeddb", "opfs" and "cross-origin". `hasModelInCache()` and the `deleteModel*InCache()` helpers manage it.',
+      completeness:
+        "A model here is over a hundred files, and this asks whether any of them are present — so a download that stopped partway still reads as cached.",
+    },
     rates: {
       selfReported: true,
       note: "Reports prefill and decode tokens/second and time-to-first-token on the final chunk, when `stream_options.include_usage` is set.",
@@ -380,6 +398,18 @@ export const DESCRIPTORS = [
     progress: {
       kind: "native",
       note: "`progressCallback` reports loaded and total bytes, across shards.",
+    },
+    // OPFS rather than Cache Storage, which is the practical difference: a
+    // caches.keys() audit of a page using wllama finds nothing and reads as
+    // "this one re-downloads every time".
+    cache: {
+      kind: "native",
+      label: "OPFS",
+      tone: "good",
+      store: "OPFS",
+      note: "The Origin Private File System, via `navigator.storage.getDirectory()` — so it does not appear in Cache Storage at all. `ModelManager` lists, downloads and removes whole models; `CacheManager` exposes `list()`, `getSize()`, `delete()` and `clear()` per file. Shard-aware.",
+      completeness:
+        "Exact: the metadata record beside a file is written only once that file completes, so an abandoned download is told apart from a finished one.",
     },
     rates: {
       selfReported: true,
@@ -505,6 +535,15 @@ export const DESCRIPTORS = [
       kind: "native",
       note: "`progress_callback` reports several statuses; `progress_total` is the one covering the whole load rather than one file.",
     },
+    cache: {
+      kind: "native",
+      label: "Cache Storage",
+      tone: "good",
+      store: "Cache Storage",
+      note: "One bucket, named by `env.cacheKey` (`transformers-cache`); `env.useBrowserCache` defaults on where the Cache API exists. `env.customCache` takes anything implementing Cache's `match` and `put`, and `env.useWasmCache` covers the ONNX Runtime binary. There is no list-or-delete helper — open the Cache yourself.",
+      completeness:
+        "A model here is several files, and this asks whether any of them are present — so a download that stopped partway still reads as cached.",
+    },
     rates: {
       selfReported: false,
       note: "Reports nothing about itself. Token counts here come from the streamer.",
@@ -516,7 +555,7 @@ export const DESCRIPTORS = [
     },
     unload: {
       frees: ["the ONNX Runtime session", "GPU-buffer tensors"],
-      keeps: ["the weights, in the HTTP cache", "the WASM binary"],
+      keeps: ["the weights, in Cache Storage", "the WASM binary"],
       caveat:
         "`dispose()` releases the session. A disposed pipeline must not be called again — doing so affects later loads in the same page.",
     },
@@ -633,6 +672,17 @@ export const DESCRIPTORS = [
     progress: {
       kind: "handrolled",
       note: "The API has no progress callback. `model` accepts a ReadableStream, so this page fetches the file itself to report progress and to cache it.",
+    },
+    // Not an omission we are guessing at: engine_settings.js calls
+    // setCacheDir(':nocache') unconditionally, commented "Not supported in JS."
+    cache: {
+      kind: "handrolled",
+      label: "implemented here",
+      tone: "warn",
+      store: "Cache Storage",
+      note: "The runtime caches nothing: `engine_settings.js` calls `setCacheDir(':nocache')` unconditionally. Because `Engine.create({ model })` accepts a ReadableStream, this page fetches the file and writes it to Cache Storage itself — under the same name Google's own demo uses, so a model pulled by either is a hit for both. Without that, every load re-downloads.",
+      completeness:
+        "Exact: one file per model, and Cache Storage only keeps a body it read to the end.",
     },
     rates: {
       selfReported: true,

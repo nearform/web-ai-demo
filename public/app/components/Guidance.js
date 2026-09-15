@@ -114,6 +114,17 @@ const AXES = [
     tone: (d) => (d.progress.kind === "native" ? "good" : "warn"),
     note: (d) => d.progress.note,
   },
+  // Where the weights live between loads — a different question from Load
+  // progress above it, and the one that decides whether a second visit costs
+  // another gigabyte. Labels are per-runtime rather than mapped from a kind,
+  // because "Cache Storage" and "OPFS" are the answer and not an enum.
+  {
+    key: "cache",
+    label: "Model caching",
+    value: (d) => d.cache.label,
+    tone: (d) => d.cache.tone,
+    note: (d) => d.cache.note,
+  },
   {
     key: "browsers",
     label: "Browser support",

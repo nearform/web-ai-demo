@@ -43,6 +43,7 @@ import { readDeepLink, writeDeepLink } from "../util/deeplink.js";
 import { jsonSafe } from "../util/wire.js";
 import { parseCustomModel } from "../util/custom-model.js";
 import { parseToolFunction, toolDeclaration } from "../util/tool-fn.js";
+import { probeModelCache } from "../util/cache-probe.js";
 import {
   DEFAULT_SYSTEM,
   DEFAULT_PROMPT,
@@ -148,6 +149,11 @@ export const useRuntime = () => {
   const [recoveredCrash, setRecoveredCrash] = useState(null);
   const [discoveredContext, setDiscoveredContext] = useState(null);
   const [generating, setGenerating] = useState(false);
+  // Which of the models in the picker already have bytes on this device, by id.
+  // Separate from `status`, which is about the runtime: a model can be cached
+  // and not loaded, loaded and (on Chrome) not cacheable at all.
+  const [cacheStates, setCacheStates] = useState({});
+  const [chromeAvailability, setChromeAvailability] = useState(null);
 
   // --- refs: things that must not drive renders ------------------------------
   // The live handle. A ref rather than state because it is never rendered and
@@ -194,6 +200,38 @@ export const useRuntime = () => {
     }),
     [log],
   );
+
+  // --- cached-model probe ---------------------------------------------------
+  // Reads the browser's storage directly rather than asking a runtime, so it
+  // costs no download — see util/cache-probe.js for why that constraint exists
+  // and what it trades away. Deliberately silent: this runs on every provider
+  // switch and after every load, and a log line each time would bury the events
+  // that matter.
+  const refreshCacheStates = useCallback(async () => {
+    if (descriptor?.modelChoice?.kind === "builtin") {
+      // No picker to annotate. The equivalent question for Chrome is whether
+      // the browser has its own model, which only availability() can answer.
+      setCacheStates({});
+      try {
+        setChromeAvailability(
+          typeof window.LanguageModel === "undefined"
+            ? null
+            : await window.LanguageModel.availability(),
+        );
+      } catch {
+        setChromeAvailability(null);
+      }
+      return;
+    }
+    setChromeAvailability(null);
+    setCacheStates(await probeModelCache(providerId, models));
+  }, [providerId, descriptor, models]);
+
+  // On selection, and whenever the list changes — which covers reading a
+  // catalog and applying a custom id.
+  useEffect(() => {
+    refreshCacheStates();
+  }, [refreshCacheStates]);
 
   // --- the reader's tool ----------------------------------------------------
   // Parsed on every edit rather than on use, because the panel renders the
@@ -705,6 +743,9 @@ export const useRuntime = () => {
       trackNow({ phase: "idle", progress: null, progressText: null });
       reportProgress(null);
       applyStatus("loaded");
+      // The thing we just fetched is now cached, so the picker's markers are
+      // stale the moment this returns.
+      refreshCacheStates();
       return true;
     } catch (err) {
       const described = describeError(err);
@@ -733,6 +774,7 @@ export const useRuntime = () => {
     context,
     replyCap,
     makeToolPayload,
+    refreshCacheStates,
     logger,
     log,
     applyStatus,
@@ -1304,6 +1346,9 @@ export const useRuntime = () => {
     model,
     setModel,
     addCustomModel,
+    cacheStates,
+    chromeAvailability,
+    refreshCacheStates,
     // knobs
     context,
     setContext,

@@ -15,6 +15,11 @@
 //     library's published types. Do not cite this project's own test runs; a
 //     number we measured on one machine is not a property of the runtime, and the
 //     page has a diagnostics panel for what happened on the reader's device.
+//   - No superlatives and no cross-runtime comparisons unless a receipt backs
+//     the count. Transformers.js carried "the widest model selection of the
+//     five" here for months; the Hub's own catalog says GGUF has 17x the ONNX
+//     text-generation models (37,644 to 2,159, measured 2026-09-15), so the card
+//     was wrong about the runtime it was flattering.
 //   - Short. The guidance panel is a reference, not prose.
 //
 // Engineering provenance — which type definition a signature came from, which
@@ -115,9 +120,10 @@ export const DESCRIPTORS = [
     id: "chrome-prompt-api",
     name: "Chrome Prompt API",
     docs: "https://developer.chrome.com/docs/ai/prompt-api",
-    tagline: "Gemini Nano, built into Chrome. No download, no model selection.",
+    tagline:
+      "Gemini Nano. Chrome downloads it, picks the variant, and updates it.",
     summary:
-      "Chrome supplies the model, so this page downloads nothing and chooses nothing. Availability depends on the browser, the OS and the device; `LanguageModel.availability()` reports it.",
+      "Chrome supplies the model, so this page ships no weights and chooses nothing — but the weights are still downloaded, on the first `create()` by any built-in AI API, with Chrome picking the variant from a GPU benchmark. Availability depends on the browser, the OS and the device; `LanguageModel.availability()` reports it.",
 
     history: {
       owner: "runtime",
@@ -166,7 +172,7 @@ export const DESCRIPTORS = [
     },
     progress: {
       kind: "native",
-      note: "`monitor` reports a `downloadprogress` event when Chrome has to fetch the model. Usually there is nothing to report.",
+      note: "`monitor` reports a `downloadprogress` event when Chrome has to fetch the model. Nothing to report once the weights are resident — but Chrome redownloads the model in full on every update, and purges it when free disk runs low.",
     },
     // The only one where "is it cached" is not a question the page can ask.
     cache: {
@@ -215,7 +221,8 @@ export const DESCRIPTORS = [
     id: "web-llm",
     name: "web-llm",
     docs: "https://github.com/mlc-ai/web-llm",
-    tagline: "MLC-compiled weights over WebGPU. OpenAI-shaped API.",
+    tagline:
+      "OpenAI-shaped API over WebGPU. Models come from its prebuilt catalog, not the Hub.",
     summary:
       "Runs MLC-compiled models on WebGPU and reports its own prefill and decode rates. Models have to be compiled for MLC, and the available list comes from the library at runtime.",
 
@@ -329,7 +336,7 @@ export const DESCRIPTORS = [
     id: "wllama",
     name: "wllama",
     docs: "https://github.com/ngxson/wllama",
-    tagline: "llama.cpp in WASM. Loads Hugging Face GGUFs directly.",
+    tagline: "llama.cpp in WASM. Loads any Hugging Face GGUF by repo and file.",
     summary:
       "Takes a GGUF file from Hugging Face, so the model list is not limited to a vendor's compiled catalog. WebGPU has been enabled by default since 3.1.",
 
@@ -474,7 +481,7 @@ export const DESCRIPTORS = [
     id: "transformers-js",
     name: "Transformers.js",
     docs: "https://huggingface.co/docs/transformers.js",
-    tagline: "ONNX Runtime Web. The widest model selection of the five.",
+    tagline: "Hugging Face's Transformers on ONNX Runtime Web.",
     summary:
       "Runs ONNX models on WebGPU, falling back to WASM. It exposes no token rates, no cache counters and no context size, so every figure this page shows for it is one the page counted.",
 
@@ -601,7 +608,8 @@ export const DESCRIPTORS = [
     id: "litert",
     name: "LiteRT-LM",
     docs: "https://developers.google.com/edge/litert-lm/js",
-    tagline: "Google's on-device runtime for language models.",
+    tagline:
+      "New runtime from Google, in early preview. Two supported models, both Gemma 4.",
     summary:
       "Runs `.litertlm` models through a WASM runtime on CPU or WebGPU. The published selection is small and every available file is over a gigabyte. The library provides no caching and no download progress, so this page implements both.",
 
@@ -729,7 +737,8 @@ export const DESCRIPTORS = [
 
 export const byId = (id) => DESCRIPTORS.find((d) => d.id === id) ?? null;
 
-// Chrome first because it needs no download, so the page does something useful
-// before a reader decides whether to spend a gigabyte. Where the API is absent,
-// its own availability check says so.
+// Chrome first because the reader's browser may already hold the weights, so the
+// page does something useful before a reader decides whether to spend a gigabyte.
+// Not because there is no download: Chrome owns one, it is just not the page's.
+// Where the API is absent, its own availability check says so.
 export const DEFAULT_PROVIDER_ID = "chrome-prompt-api";

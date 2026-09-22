@@ -1,4 +1,4 @@
-/* global navigator:false, WebAssembly:false */
+/* global navigator:false, WebAssembly:false, URL:false */
 
 // wllama adapter (@wllama/wllama 3.6.0, llama.cpp b10454-4df29be).
 //
@@ -34,8 +34,28 @@
 import { Wllama } from "@wllama/wllama";
 import { ggufLoadParams } from "../util/hf-gguf.js";
 
-const WLLAMA_VERSION = "3.6.0";
-const WASM_URL = `https://cdn.jsdelivr.net/npm/@wllama/wllama@${WLLAMA_VERSION}/src/wasm/wllama.wasm`;
+// The WASM URL is DERIVED from the import map, never written down. wllama ships
+// its JS and its WASM from one llama.cpp sync, so a hardcoded version here can
+// silently pair new bindings with an old binary — which is exactly what a bump
+// of the specifier in index.html used to leave behind.
+//
+// import.meta.resolve() applies this document's import map, so it returns the
+// same URL the `@wllama/wllama` import above resolved to, version and all. The
+// WASM then hangs off it as a relative path: esm/index.js → ../src/wasm/…
+// There is nothing to keep in sync because there is no second copy.
+const WLLAMA_ESM_URL = import.meta.resolve("@wllama/wllama");
+
+// Fail loudly rather than fetching a 404 later. The relative hop above assumes
+// the specifier still points at esm/index.js; if it ever points somewhere else,
+// the derived path is wrong and this says so at load, naming what it got.
+if (!/\/esm\/index(\.min)?\.js$/.test(new URL(WLLAMA_ESM_URL).pathname)) {
+  throw new Error(
+    `Cannot derive the wllama WASM URL: expected the @wllama/wllama specifier ` +
+      `to resolve to esm/index.js, got ${WLLAMA_ESM_URL}`,
+  );
+}
+
+const WASM_URL = new URL("../src/wasm/wllama.wasm", WLLAMA_ESM_URL).href;
 
 // The instance is the state. exit() nulls its internal proxy, so a spent Wllama
 // cannot be reloaded — load() must construct a fresh one or loadModel throws

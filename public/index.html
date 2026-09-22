@@ -57,30 +57,51 @@
           bare specifier 404s. (The README's esm/wasm-from-cdn.js import is not in
           the published package at all.)
 
-        - @litert-lm/core is PINNED to 0.15.0. dist-tags.latest is 0.16.0, which
-          is an empty publish — one package.json, no dist/, no wasm/ — so Google's
-          own documented URL, /npm/@litert-lm/core/+esm, returns 404. v0.16.1 is
-          tagged on GitHub and never published. Re-checked 2026-08-22; the detail
-          is in app/providers/litert.js. The +esm bundle pulls
-          @litertjs/wasm-utils from jsDelivr by root-relative URL, so this one
-          entry is all that is needed.
+        - @litert-lm/core no longer needs its 0.15.0 pin. 0.16.0 was an empty
+          publish — one package.json, no dist/, no wasm/ — which 404'd Google's
+          own documented URL, /npm/@litert-lm/core/+esm, for three weeks. 0.17.0
+          (2026-09-04) and 0.17.1 (2026-09-16) are real publishes, the documented
+          URL resolves again, and DEFAULT_WASM_PATH now points at the package's
+          own version instead of being stranded on 0.15.0. Verified on device
+          2026-09-21; the detail is in app/providers/litert.js. The +esm bundle
+          pulls @litertjs/wasm-utils from jsDelivr by root-relative URL, so this
+          one entry is all that is needed.
 
         - @huggingface/transformers deliberately has no /+esm suffix: the package
           root serves the ESM build directly, and jsDelivr's +esm transform breaks
           its worker and wasm path resolution.
+
+      The last entry, react@%5E19.3.0/, is an ALIAS, not a duplicate, and without
+      it this page renders nothing at all. react-dom@19.2.8/client/+esm imported
+      "/npm/react@19.2.8/+esm" — the exact version, the same URL the import map
+      hands the app, so one React instance. react-dom@19.3.0/client/+esm imports
+      "/npm/react@^19.3.0/+esm" instead, a RANGE, which jsDelivr serves as a
+      different URL. Two URLs are two modules: the app's useState reaches a React
+      whose dispatcher react-dom never initialised, and mounting dies with "Cannot
+      read properties of null (reading 'useState')".
+
+      Mapping the range back to the exact version collapses them to one instance.
+      This is the trailing-slash PREFIX form deliberately — it also catches
+      subpaths such as /npm/react@^19.3.0/jsx-runtime/+esm, which the bare
+      "…/+esm" key would miss. %5E is "^" percent-encoded, matching the specifier
+      jsDelivr actually emits. Confirmed 2026-09-21: both URLs imported and their
+      internals objects compared (different), then each alias form rendered in
+      isolation. Re-check whenever react-dom moves.
     -->
     <script type="importmap">
       {
         "imports": {
           "htm": "https://cdn.jsdelivr.net/npm/htm@3.1.1/+esm",
-          "react": "https://cdn.jsdelivr.net/npm/react@19.2.8/+esm",
-          "react-dom": "https://cdn.jsdelivr.net/npm/react-dom@19.2.8/+esm",
-          "react-dom/client": "https://cdn.jsdelivr.net/npm/react-dom@19.2.8/client/+esm",
+          "react": "https://cdn.jsdelivr.net/npm/react@19.3.0/+esm",
+          "react-dom": "https://cdn.jsdelivr.net/npm/react-dom@19.3.0/+esm",
+          "react-dom/client": "https://cdn.jsdelivr.net/npm/react-dom@19.3.0/client/+esm",
           "crashbox": "https://cdn.jsdelivr.net/npm/crashbox@0.1.0/+esm",
-          "@mlc-ai/web-llm": "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.84/+esm",
-          "@wllama/wllama": "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.6.0/esm/index.js",
-          "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0",
-          "@litert-lm/core": "https://cdn.jsdelivr.net/npm/@litert-lm/core@0.15.0/+esm"
+          "@mlc-ai/web-llm": "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.85/+esm",
+          "@wllama/wllama": "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.6.1/esm/index.js",
+          "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0",
+          "@litert-lm/core": "https://cdn.jsdelivr.net/npm/@litert-lm/core@0.17.1/+esm",
+
+          "https://cdn.jsdelivr.net/npm/react@%5E19.3.0/": "https://cdn.jsdelivr.net/npm/react@19.3.0/"
         }
       }
     </script>

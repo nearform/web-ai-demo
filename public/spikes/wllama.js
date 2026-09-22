@@ -1,4 +1,4 @@
-/* global navigator:false, WebAssembly:false */
+/* global navigator:false, WebAssembly:false, URL:false */
 
 // Spike: wllama (@wllama/wllama 3.6.0, llama.cpp b10454-4df29be)
 //
@@ -46,8 +46,17 @@
 import { Wllama } from "@wllama/wllama";
 import { runSpike } from "./lib/harness.js";
 
-const WLLAMA_VERSION = "3.6.0";
-const WASM_URL = `https://cdn.jsdelivr.net/npm/@wllama/wllama@${WLLAMA_VERSION}/src/wasm/wllama.wasm`;
+// Derived from this page's import map rather than written down — the JS and the
+// WASM come from one llama.cpp sync, so a hardcoded version can pair new
+// bindings with an old binary. See app/providers/wllama.js for the full note.
+const WLLAMA_ESM_URL = import.meta.resolve("@wllama/wllama");
+if (!/\/esm\/index(\.min)?\.js$/.test(new URL(WLLAMA_ESM_URL).pathname)) {
+  throw new Error(
+    `Cannot derive the wllama WASM URL: expected the @wllama/wllama specifier ` +
+      `to resolve to esm/index.js, got ${WLLAMA_ESM_URL}`,
+  );
+}
+const WASM_URL = new URL("../src/wasm/wllama.wasm", WLLAMA_ESM_URL).href;
 
 // n_ctx has to be explicit (trap 3). 4096 is a deliberate compromise: big enough
 // that a five-turn conversation is a real test of prefix reuse, small enough that

@@ -1,4 +1,4 @@
-/* global navigator:false */
+/* global navigator:false, fetch:false */
 
 // web-llm adapter (@mlc-ai/web-llm 0.2.84).
 //
@@ -26,7 +26,7 @@ let lastSystem = null;
 
 // Which model is resident. Needed because the tool allowlist below is checked
 // per request and `generate` is not told which model it is talking to — the
-// engine is the whole handle.
+// handle is only the engine and its context size.
 let loadedModelId = null;
 
 // The allowlist lives in the descriptor, not here, because the picker has to
@@ -282,7 +282,40 @@ export default {
         `Tool calling is unavailable on this model. web-llm accepts \`tools\` for ${TOOL_MODEL_IDS.length} ids only: ${TOOL_MODEL_IDS.join(", ")}.`,
       );
     }
-    return engine;
+
+    // With no override, the window is the one in the model's catalog record, so
+    // the control can show that number instead of "model default".
+    const record = webllm.prebuiltAppConfig?.model_list?.find(
+      (m) => m.model_id === model,
+    );
+    const discoveredContext =
+      context ?? record?.overrides?.context_window_size ?? null;
+
+    // The catalog's value is a memory-saving default, not a limit: the KV cache
+    // is allocated from whatever context_window_size says. The model's own
+    // mlc-chat-config.json carries the length it was trained to, which is where
+    // the slider should stop (SmolLM2 8192, Llama 3.2 131072).
+    let contextCeiling = null;
+    if (record?.model) {
+      try {
+        const res = await fetch(
+          `${record.model.replace(/\/$/, "")}/resolve/main/mlc-chat-config.json`,
+        );
+        const trained = res.ok ? (await res.json()).context_window_size : 0;
+        if (trained > 0) contextCeiling = trained;
+      } catch (err) {
+        log.warn("could not read mlc-chat-config.json", {
+          message: String(err),
+        });
+      }
+    }
+    log.info("context window", {
+      overridden: Boolean(context),
+      contextWindowSize: discoveredContext,
+      trainedContext: contextCeiling,
+    });
+
+    return { engine, discoveredContext, contextCeiling };
   },
 
   generate: async ({
@@ -348,7 +381,7 @@ export default {
     // exercised by no upstream example, so treat the Stop button as its test.
     const onAbort = () => {
       log.info("interruptGenerate()");
-      handle.interruptGenerate?.();
+      handle.engine.interruptGenerate?.();
     };
     signal?.addEventListener("abort", onAbort, { once: true });
 
@@ -465,7 +498,7 @@ export default {
               : "One entry per round trip: the model asked for a tool, the result was appended as a `tool` message, and the whole history went over again. A leading <think> block is stripped from the visible answer.",
         });
 
-        const chunks = await handle.chat.completions.create(request);
+        const chunks = await handle.engine.chat.completions.create(request);
 
         // Fragments, keyed by `index`. The name and the arguments both arrive in
         // pieces across chunks, so they are concatenated rather than assigned —
@@ -595,7 +628,7 @@ export default {
   // prefill rate this page then reports would describe a reuse that the reader
   // has no reason to expect.
   resetConversation: async ({ handle, log }) => {
-    await handle?.resetChat?.();
+    await handle?.engine?.resetChat?.();
     // The warning this drives compares a turn's system prompt against the cache
     // it would have reused. There is no cache now, so the next turn has nothing
     // to warn about.
@@ -609,7 +642,7 @@ export default {
     // unload() disposes the pipelines and destroys the WebGPU device. The
     // downloaded weights stay cached, and unlike wllama and Transformers.js the
     // instance remains reusable afterwards.
-    await handle?.unload?.();
+    await handle?.engine?.unload?.();
     lastSystem = null;
     loadedModelId = null;
     log.info("engine.unload() returned — weights remain cached on disk");

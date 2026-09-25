@@ -148,6 +148,11 @@ export const useRuntime = () => {
   const [runs, setRuns] = useState([]);
   const [recoveredCrash, setRecoveredCrash] = useState(null);
   const [discoveredContext, setDiscoveredContext] = useState(null);
+  // What a load taught us about each model's context, by `provider|model`: the
+  // most it can take (`ceiling`) and, on wllama, what it cost in memory. Kept
+  // across unloads so the slider stays sized to the model, and the estimate
+  // stays up, while the reader picks a value for the next load.
+  const [contextFacts, setContextFacts] = useState({});
   const [generating, setGenerating] = useState(false);
   // Which of the models in the picker already have bytes on this device, by id.
   // Separate from `status`, which is about the runtime: a model can be cached
@@ -723,6 +728,15 @@ export const useRuntime = () => {
       // show what actually happened rather than what we asked for.
       if (handle?.discoveredContext) {
         setDiscoveredContext(handle.discoveredContext);
+      }
+      if (handle?.contextCeiling || handle?.memory) {
+        setContextFacts((prev) => ({
+          ...prev,
+          [`${providerId}|${targetModel}`]: {
+            ceiling: handle.contextCeiling ?? null,
+            memory: handle.memory ?? null,
+          },
+        }));
       }
 
       const elapsed = performance.now() - started;
@@ -1353,6 +1367,8 @@ export const useRuntime = () => {
     context,
     setContext,
     discoveredContext,
+    contextCeiling: contextFacts[`${providerId}|${model}`]?.ceiling ?? null,
+    contextMemory: contextFacts[`${providerId}|${model}`]?.memory ?? null,
     replyCap,
     setReplyCap,
     system,

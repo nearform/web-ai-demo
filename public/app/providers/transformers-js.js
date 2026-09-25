@@ -152,6 +152,15 @@ export default {
       },
     });
 
+    // The runtime reports no context budget, but the model's config does say how
+    // far it was trained. Multimodal configs (Gemma 4) nest it under
+    // `text_config`.
+    const config = generator.model?.config ?? {};
+    const discoveredContext =
+      config.max_position_embeddings ??
+      config.text_config?.max_position_embeddings ??
+      null;
+
     log.info("pipeline ready", {
       device,
       dtype,
@@ -160,13 +169,11 @@ export default {
       // turn like wllama, but unlike wllama it exposes no cache counters at all,
       // so there is nothing to read.
       reportsCacheCounters: false,
-      // Nor any context figure. This is the one runtime where the demo cannot
-      // tell you what the budget is, which is why its context control is absent
-      // rather than read-only.
-      reportsContextWindow: false,
+      // A ceiling from the model's config, not a budget the runtime allocated.
+      maxPositionEmbeddings: discoveredContext,
     });
 
-    return generator;
+    return { generator, discoveredContext };
   },
 
   generate: async ({
@@ -224,7 +231,7 @@ export default {
     signal?.addEventListener("abort", onAbort, { once: true });
 
     let tokenCount = 0;
-    const streamer = new TextStreamer(handle.tokenizer, {
+    const streamer = new TextStreamer(handle.generator.tokenizer, {
       // skip_prompt matters: return_full_text defaults true, so without this the
       // prompt is streamed back at us before the reply.
       skip_prompt: true,
@@ -253,7 +260,7 @@ export default {
 
     const startedAt = performance.now();
     try {
-      const output = await handle(conversation, {
+      const output = await handle.generator(conversation, {
         // Straight to apply_chat_template. Whether the model's template knows
         // what to do with it is the model's business; the docs are explicit
         // that an unaware template ignores the argument silently.
@@ -317,7 +324,7 @@ export default {
     // handle is never touched again. The controller guarantees that: it drops the
     // handle and disables Ask the moment unload returns.
     try {
-      await handle?.dispose?.();
+      await handle?.generator?.dispose?.();
       log.info(
         "pipeline.dispose() returned — ORT session released. Weights stay in the HTTP cache and env.useWasmCache keeps the WASM binary, so a reload is fast.",
       );

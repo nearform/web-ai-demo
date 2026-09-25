@@ -371,8 +371,13 @@ export const DESCRIPTORS = [
       field: "n_ctx",
       default: DEFAULT_CONTEXT,
       min: 512,
+      // Until a model loads. Then the model's n_ctx_train, which is 128K or
+      // 256K for most of the list.
       max: 32768,
       step: 512,
+      // llama.cpp prints its buffer sizes at load, so the control can show what
+      // a given n_ctx would cost.
+      memoryEstimate: true,
       // Defaults to 1024, and n_ctx_auto was removed in v3.0.
       note: "Set explicitly, because it defaults to 1024 rather than the model's trained context. The KV cache is allocated from this, so it is a memory cost as well as a limit.",
     },
@@ -483,7 +488,7 @@ export const DESCRIPTORS = [
     docs: "https://huggingface.co/docs/transformers.js",
     tagline: "Hugging Face's Transformers on ONNX Runtime Web.",
     summary:
-      "Runs ONNX models on WebGPU, falling back to WASM. It exposes no token rates, no cache counters and no context size, so every figure this page shows for it is one the page counted.",
+      "Runs ONNX models on WebGPU, falling back to WASM. It exposes no token rates, no cache counters and no context budget of its own, so every figure this page shows for it is one the page counted.",
 
     history: {
       owner: "caller",
@@ -508,9 +513,16 @@ export const DESCRIPTORS = [
       placeholder: "onnx-community/Qwen3.5-0.8B-Text-ONNX:q4f16",
       note: "`owner/repo` for a repository of ONNX weights, `owner/repo:dtype` to pick the quantization, `owner/repo|onnx/model_q4.onnx` to pick the file, or a Hub URL. Weights are read from the `onnx/` subfolder, which is `pipeline()`'s `subfolder` default. Nothing checks that the file exists first.",
     },
+    // Read-only, and from the model rather than the runtime: there is no option
+    // to set, and the KV cache (`DynamicCache`) grows with the conversation
+    // instead of being allocated up front. The ceiling is the length the model
+    // was trained to. Decode slows in steps well before it on WebGPU — issue
+    // #1741, still open against 4.2.0 — which is a defect, not a property, so it
+    // stays out of the note.
     context: {
-      control: "none",
-      note: "Not exposed. The model's own config decides, and nothing reads it back.",
+      control: "readonly",
+      field: "config.max_position_embeddings",
+      note: "Not settable. The KV cache grows with the conversation up to the length the model was trained to, which is read from its config once loaded.",
     },
     replyCap: {
       control: "turn",

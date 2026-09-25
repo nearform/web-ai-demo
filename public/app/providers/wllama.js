@@ -1,4 +1,4 @@
-/* global navigator:false, WebAssembly:false, URL:false */
+/* global navigator:false, WebAssembly:false, URL:false, console:false */
 
 // wllama adapter (@wllama/wllama 3.6.0, llama.cpp b10454-4df29be).
 //
@@ -33,6 +33,7 @@
 
 import { Wllama } from "@wllama/wllama";
 import { ggufLoadParams } from "../util/hf-gguf.js";
+import { parseLlamaMemory } from "../util/llama-memory.js";
 
 // The WASM URL is DERIVED from the import map, never written down. wllama ships
 // its JS and its WASM from one llama.cpp sync, so a hardcoded version here can
@@ -152,7 +153,29 @@ export default {
     // A fresh instance every load — see the note on `wllama` above.
     // parallelDownloads lives on the CONSTRUCTOR's second argument, not the load
     // call, which is easy to get wrong from the docs.
-    wllama = new Wllama({ default: WASM_URL }, { parallelDownloads: 3 });
+    //
+    // The logger is the default (console) plus a copy of each line, because the
+    // buffer sizes llama.cpp prints at load are the only measure of what this
+    // context costs in memory.
+    const nativeLines = [];
+    const tee =
+      (fn) =>
+      (...args) => {
+        nativeLines.push(args.join(" "));
+        fn(...args);
+      };
+    wllama = new Wllama(
+      { default: WASM_URL },
+      {
+        parallelDownloads: 3,
+        logger: {
+          debug: tee(console.debug),
+          log: tee(console.log),
+          warn: tee(console.warn),
+          error: tee(console.error),
+        },
+      },
+    );
 
     // Cache state before we touch the network. This is the closest thing wllama
     // has to "is it already downloaded", and it is shard-aware where
@@ -201,11 +224,17 @@ export default {
     });
 
     let discoveredContext = null;
+    let contextCeiling = null;
+    let memory = null;
     try {
       const info = await wllama.getLoadedContextInfo();
       // n_ctx read back off the runtime, not echoed from our request — a
       // silently clamped context shows up here and nowhere else.
       discoveredContext = info.n_ctx ?? null;
+      // The length the model was trained to, which is where the slider stops.
+      contextCeiling = info.n_ctx_train ?? null;
+      memory = parseLlamaMemory(nativeLines, info.n_ctx, info.n_ubatch);
+      log.info("memory at load, from llama.cpp buffer sizes", memory);
       log.info("loaded context info", {
         n_ctx: info.n_ctx,
         n_ctx_train: info.n_ctx_train,
@@ -221,7 +250,7 @@ export default {
       log.warn("getLoadedContextInfo() failed", { message: String(err) });
     }
 
-    return { wllama, discoveredContext };
+    return { wllama, discoveredContext, contextCeiling, memory };
   },
 
   generate: async ({

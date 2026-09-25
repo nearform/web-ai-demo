@@ -1,6 +1,36 @@
 import { useState } from "react";
 import { html } from "../util/html.js";
 import { CACHED, ABSENT, cachedCount } from "../util/cache-probe.js";
+import { estimateLlamaMemory } from "../util/llama-memory.js";
+
+const mib = (n) =>
+  n >= 1024 ? `${(n / 1024).toFixed(1)} GiB` : `${Math.round(n)} MiB`;
+
+// What the slider's value would cost, scaled from what the last load of this
+// model measured. Before any load there is nothing to scale from.
+const MemoryEstimate = ({ memory, nCtx }) => {
+  const e = estimateLlamaMemory(memory, nCtx);
+  if (!e) {
+    return html`<p className="control-note">
+      A memory estimate appears after the first load, from the buffer sizes
+      llama.cpp reports.
+    </p>`;
+  }
+  // One string, because htm drops the space after a "+" that ends a line.
+  const parts = [
+    `${mib(e.weightsMiB)} weights`,
+    `${mib(e.kvMiB)} KV cache (${e.kvPerTokenKiB.toFixed(1)} KiB a token)`,
+    `${mib(e.otherMiB)} other`,
+  ].join(" + ");
+  const gpu = e.gpuMiB ? `, ${mib(e.gpuMiB)} of it on the GPU` : "";
+  return html`
+    <p className="control-note">
+      ${`Memory at ${nCtx.toLocaleString()}: ${parts} ≈ `}
+      <strong>${mib(e.totalMiB)}</strong>
+      ${`${gpu}. Scaled from the buffers llama.cpp allocated at the last load.`}
+    </p>
+  `;
+};
 
 const STATUS_LABEL = {
   not_loaded: "not loaded",
@@ -252,6 +282,8 @@ const ContextControl = ({
   context,
   setContext,
   discoveredContext,
+  contextCeiling,
+  contextMemory,
   disabled,
 }) => {
   const c = descriptor.context;
@@ -267,18 +299,32 @@ const ContextControl = ({
     `;
   }
 
-  // Readable but not writable, and only once a session exists.
+  // Readable but not writable, and only once loaded. Drawn as the same slider as
+  // the settable runtimes, disabled and pinned full at the reported value, so the
+  // five read as one control that some runtimes lock.
   if (c.control === "readonly") {
     return html`
       <div className="control">
-        <span className="control-label">Context</span>
-        <p className="control-value control-value--prose">
-          ${
-            discoveredContext
-              ? `${discoveredContext.toLocaleString()} tokens, from ${c.field}`
-              : `Not known until loaded — ${c.field} needs a live session`
-          }
-        </p>
+        <span className="control-label"> Context <code>${c.field}</code> </span>
+        <div className="control-row">
+          <input
+            type="range"
+            className="control-range"
+            min="0"
+            max=${discoveredContext ?? 1}
+            value=${discoveredContext ?? 0}
+            aria-label="Context, read-only"
+            disabled
+          />
+          <span className="control-value">
+            ${discoveredContext ? discoveredContext.toLocaleString() : "—"}
+          </span>
+        </div>
+        ${
+          discoveredContext
+            ? null
+            : html`<p className="control-note">Not known until loaded.</p>`
+        }
         <p className="control-note">${c.note}</p>
       </div>
     `;
@@ -286,7 +332,12 @@ const ContextControl = ({
 
   // Settable at load, so it is disabled rather than hidden once loaded: the value
   // in force is worth seeing alongside the numbers it produced.
+  //
+  // The range is the runtime's until a model has loaded once, then the model's
+  // own trained length, so the thumb sits where the value falls in what that
+  // model can take.
   const clamped = discoveredContext && context && discoveredContext !== context;
+  const max = contextCeiling ?? c.max;
   return html`
     <label className="control">
       <span className="control-label"> Context <code>${c.field}</code> </span>
@@ -295,14 +346,20 @@ const ContextControl = ({
           type="range"
           className="control-range"
           min=${c.min}
-          max=${c.max}
+          max=${max}
           step=${c.step}
-          value=${context ?? c.default ?? c.min}
+          value=${context ?? discoveredContext ?? c.default ?? c.min}
           onChange=${(e) => setContext(Number(e.target.value))}
           disabled=${disabled}
         />
         <span className="control-value">
-          ${context ? context.toLocaleString() : "model default"}
+          ${
+            context
+              ? context.toLocaleString()
+              : discoveredContext
+                ? `${discoveredContext.toLocaleString()}, model default`
+                : "model default"
+          }
         </span>
       </div>
       ${
@@ -328,6 +385,21 @@ const ContextControl = ({
                 clamped.
               </p>
             `
+          : null
+      }
+      <p className="control-note">
+        ${
+          contextCeiling
+            ? `Range ${c.min.toLocaleString()}–${max.toLocaleString()}, up to the length this model was trained to.`
+            : `Range ${c.min.toLocaleString()}–${max.toLocaleString()} for now. Once a model loads, it resizes to that model's trained length.`
+        }
+      </p>
+      ${
+        c.memoryEstimate
+          ? html`<${MemoryEstimate}
+              memory=${contextMemory}
+              nCtx=${context ?? discoveredContext ?? c.default ?? c.min}
+            />`
           : null
       }
       <p className="control-note">${c.note}</p>
@@ -450,6 +522,8 @@ export const RuntimePanel = ({ rt }) => {
         context=${rt.context}
         setContext=${rt.setContext}
         discoveredContext=${rt.discoveredContext}
+        contextCeiling=${rt.contextCeiling}
+        contextMemory=${rt.contextMemory}
         disabled=${lockedAtLoad}
       />
 

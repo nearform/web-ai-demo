@@ -28,7 +28,7 @@
 //                    https://huggingface.co/mlc-ai/<model_id>/resolve/main/…
 //   Transformers.js  Cache Storage "transformers-cache"   (env.cacheKey)
 //                    https://huggingface.co/<owner>/<repo>/resolve/main/…
-//   LiteRT-LM        Cache Storage "litertlm-models"      (ours; see litert.js)
+//   LiteRT-LM.js     Cache Storage "litertlm-models"      (ours; see litert.js)
 //                    the model URL, verbatim
 //   wllama           OPFS, directory "cache"
 //                    <sha1>_<filename.gguf>, plus __metadata__<sha1>_<filename>

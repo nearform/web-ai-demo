@@ -108,7 +108,7 @@ export const DEFAULT_TOOL_PROMPT = "What is the weather in Tokyo right now?";
  * How many times a turn may go model → tool → model before the adapter gives
  * up. Every runtime that closes the loop needs a ceiling, because a model that
  * calls the same tool forever is a real failure mode and not a rare one; the
- * wllama example upstream uses 5 and LiteRT-LM defaults to 25.
+ * wllama example upstream uses 5 and LiteRT-LM.js defaults to 25.
  */
 export const MAX_TOOL_ROUNDS = 4;
 
@@ -618,10 +618,10 @@ export const DESCRIPTORS = [
   // -------------------------------------------------------------------------
   {
     id: "litert",
-    name: "LiteRT-LM",
+    name: "LiteRT-LM.js",
     docs: "https://developers.google.com/edge/litert-lm/js",
     tagline:
-      "New runtime from Google, in early preview. Two supported models, both Gemma 4.",
+      "New runtime from Google, in early preview. Five official web models, all Gemma 4, all 2 GB or more.",
     summary:
       "Runs `.litertlm` models through a WASM runtime on CPU or WebGPU. The published selection is small and every available file is over a gigabyte. The library provides no caching and no download progress, so this page implements both.",
 

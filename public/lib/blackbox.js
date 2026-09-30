@@ -140,7 +140,7 @@ export const warnings = () => {
 // detector is **per-instance**: `device.lost`, `uncapturederror` and the
 // oversized-buffer early warning are all wired by attachGPUDevice(device), and
 // the harness never holds a device. Each runtime calls requestDevice() privately
-// and keeps the result to itself (LiteRT-LM hands it to the WASM module as
+// and keeps the result to itself (LiteRT-LM.js hands it to the WASM module as
 // `preinitializedWebGPUDevice`, wllama and web-llm keep theirs internal).
 //
 // So intercept the one call they all have to make. This forwards unconditionally

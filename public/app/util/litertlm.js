@@ -1,10 +1,10 @@
-// LiteRT-LM model specifiers, parsed without loading the runtime to do it.
+// LiteRT-LM.js model specifiers, parsed without loading the runtime to do it.
 //
 // Same reasoning as util/hf-gguf.js: the picker validates what a reader typed
 // BEFORE a gigabyte starts moving, and importing the adapter to borrow its
 // parser would pull @litert-lm/core just to check a string.
 //
-// A LiteRT-LM id is `BACKEND|url`, and the backend half is not a detail. It
+// A LiteRT-LM.js id is `BACKEND|url`, and the backend half is not a detail. It
 // decides which of two load paths runs — `ModelAssets.createStreaming()` for
 // GPU_ARTISAN, `loadModelToVfs()` plus `ModelAssets.create()` for the rest —
 // and therefore whether the `-web` packaging requirement applies at all. The
@@ -113,7 +113,7 @@ const noteFor = ({ backendName, url }) => {
 };
 
 /**
- * Parse a LiteRT-LM model specifier.
+ * Parse a LiteRT-LM.js model specifier.
  *
  * Accepts, in order of how likely it is to be what someone pasted:
  *
@@ -209,7 +209,7 @@ export const parseLitertlmSpec = (raw) => {
     const cut = path.indexOf("/", path.indexOf("/") + 1);
     if (cut === -1) {
       return fail(
-        `\`${path}\` is a repo but names no file. LiteRT-LM is handed a URL, not a repo, so the \`.litertlm\` filename is required.`,
+        `\`${path}\` is a repo but names no file. LiteRT-LM.js is handed a URL, not a repo, so the \`.litertlm\` filename is required.`,
       );
     }
     const repo = path.slice(0, cut);

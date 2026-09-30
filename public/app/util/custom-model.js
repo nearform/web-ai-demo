@@ -9,7 +9,7 @@
 //
 // The three grammars have deliberately converged rather than being unified.
 // `repo:QUANT` for wllama, `repo:dtype` for Transformers.js and `BACKEND|url`
-// for LiteRT-LM each mirror what that runtime's own API takes, so a reader who
+// for LiteRT-LM.js each mirror what that runtime's own API takes, so a reader who
 // knows llama.cpp's `-hf` flag, or `pipeline()`'s `dtype`, or Google's sample
 // can paste what they already know. A single invented syntax would have been
 // tidier here and wrong at every one of those three ends.

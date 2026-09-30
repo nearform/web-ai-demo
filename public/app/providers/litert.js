@@ -1,10 +1,10 @@
 /* global navigator:false, WebAssembly:false, fetch:false, caches:false, Response:false, TransformStream:false, performance:false */
 
-// LiteRT-LM adapter (@litert-lm/core 0.15.0).
+// LiteRT-LM.js adapter (@litert-lm/core 0.15.0).
 //
 // FIRST, THE NAME. This stop was originally called "LiteRT.js" and that was the
 // wrong product. LiteRT.js (`@litertjs/core`) runs general `.tflite` models and
-// its own docs send LLM users away. The LLM path is **LiteRT-LM**
+// its own docs send LLM users away. The LLM path is **LiteRT-LM.js**
 // (`@litert-lm/core`), documented at developers.google.com/edge/litert-lm/js.
 // MediaPipe's LLM Inference API — the older third name — is banner-flagged
 // maintenance-only and points here too. Three names, one of them ours to get

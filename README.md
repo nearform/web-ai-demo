@@ -13,13 +13,13 @@ and compare.
 | [web-llm](https://github.com/mlc-ai/web-llm)                         | MLC-compiled weights over WebGPU    | Needs WebGPU         |
 | [wllama](https://github.com/ngxson/wllama)                           | llama.cpp in WASM, loads GGUFs      | Any, WebGPU optional |
 | [Transformers.js](https://huggingface.co/docs/transformers.js)       | ONNX Runtime Web                    | Any, WebGPU optional |
-| [LiteRT-LM](https://developers.google.com/edge/litert-lm/js)         | Google's on-device LLM runtime      | Needs WebGPU         |
+| [LiteRT-LM.js](https://developers.google.com/edge/litert-lm/js)      | Google's on-device LLM runtime      | Needs WebGPU         |
 
 The page compares them on eleven axes — history ownership, system prompt, context
 control, enforced JSON, **tool calling**, cancellation and the rest — in a table
 under _Capabilities_.
 
-_Note_: `@litert-lm/core` (LiteRT-LM) is not `@litertjs/core` (LiteRT.js), which
+_Note_: `@litert-lm/core` (LiteRT-LM.js) is not `@litertjs/core` (LiteRT.js), which
 runs general `.tflite` models rather than LLMs.
 
 ## Usage
@@ -69,7 +69,7 @@ The five do not agree, and that is the point:
 | web-llm           | Works, on **five model ids only** — the Hermes builds, 7B and 8B. Any other id throws, and the page says so instead.                                                         |
 | wllama            | Works. `tools` passes through to llama-server, which parses the call out of the GGUF's own template.                                                                         |
 | Transformers.js   | The declarations reach `apply_chat_template` and stop there. Nothing parses a call back out, so nothing runs — you get the model's tool-call syntax as text.                 |
-| LiteRT-LM         | Works, and it is the only one that closes the loop itself: `AutoToolChat` calls your function between decode rounds. Declarations are fixed at load, like the system prompt. |
+| LiteRT-LM.js      | Works, and it is the only one that closes the loop itself: `AutoToolChat` calls your function between decode rounds. Declarations are fixed at load, like the system prompt. |
 
 Calls that happen appear above the reply with their arguments, result and timing,
 and every round trip shows in the **verbatim** panel — one request per round, so
@@ -88,7 +88,7 @@ The chooser is in the URL, so a selection can be sent to someone:
 `litert`; `model` is a model id from that runtime's picker, URL-encoded. Both
 update as you click, so the address bar is always a link to what is on screen.
 
-For **wllama**, **Transformers.js** and **LiteRT-LM**, `model` need not be one of
+For **wllama**, **Transformers.js** and **LiteRT-LM.js**, `model` need not be one of
 the listed ids: each takes a model you name, in the field under its picker, under
 the grammar its own API takes. What you apply joins the picker and the link, so it
 can be sent on like any other selection.
@@ -100,7 +100,7 @@ can be sent on like any other selection.
   `owner/repo:q4f16` to choose the quantization, `owner/repo|onnx/model_q4.onnx`
   to choose the file, or a Hub URL. Weights are read from the repo's `onnx/`
   subfolder, which is what `pipeline()` defaults to.
-- **LiteRT-LM** — any `.litertlm` file: `owner/repo/model-web.litertlm`, a Hub
+- **LiteRT-LM.js** — any `.litertlm` file: `owner/repo/model-web.litertlm`, a Hub
   URL, or any `http(s)` URL, optionally prefixed `GPU_ARTISAN|` or `CPU|` to pick
   the backend. Google documents the JS API as supporting a limited set of
   web-compatible models — currently two `-web.litertlm` files — so another file

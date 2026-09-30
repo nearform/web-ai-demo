@@ -59,7 +59,7 @@ repo follows it. Sizes below are bytes read off the Hugging Face tree API on
 | Gemma 4 E2B  | `gemma-4-E2B-it-Q4_0.gguf`     | 2709 MiB | Rule 1. Desktop only, and expected to be marginal |
 
 wllama also takes a repo **you** name, in the field under the picker — as do
-Transformers.js and LiteRT-LM, each under its own grammar; see "Models you name
+Transformers.js and LiteRT-LM.js, each under its own grammar; see "Models you name
 yourself" below. The policy above governs the curated list, not what the runtime
 will accept. A GGUF is a
 GGUF, so there is no vetted-catalog reason to refuse one — `owner/repo:QUANT` as
@@ -112,7 +112,7 @@ size. Two findings fall straight out of the filter:
 Embeddings are excluded properly via the catalog's own `model_type` field
 (`ModelType.embedding`), not by guessing at names.
 
-**LiteRT-LM** is where this policy runs out of road, and the emptiness is the
+**LiteRT-LM.js** is where this policy runs out of road, and the emptiness is the
 finding rather than a gap in the list. Rule 4 wants an entry under ~400 MB so a
 phone has something to run; **there is nothing to offer.** Measured 2026-08-22 by
 running it, not by reading the catalog:
@@ -210,7 +210,7 @@ syntax, so what a reader already knows transfers:
 | --------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | wllama          | `owner/repo:QUANT`, `owner/repo\|file.gguf`, `owner/repo`, a Hub URL                                           | `loadModelFromHF({ repo, file, quant })`               |
 | Transformers.js | `owner/repo`, `owner/repo:dtype`, `owner/repo\|onnx/model_q4.onnx`, a Hub URL                                  | `pipeline()`'s `subfolder`, `model_file_name`, `dtype` |
-| LiteRT-LM       | `owner/repo/file-web.litertlm`, any `http(s)` `.litertlm` URL, either with a `GPU_ARTISAN\|` or `CPU\|` prefix | `Engine.create({ model: url })` on that backend        |
+| LiteRT-LM.js    | `owner/repo/file-web.litertlm`, any `http(s)` `.litertlm` URL, either with a `GPU_ARTISAN\|` or `CPU\|` prefix | `Engine.create({ model: url })` on that backend        |
 
 Three things are true of all three, and they are the point of doing it this way:
 
@@ -225,7 +225,7 @@ Three things are true of all three, and they are the point of doing it this way:
 3. **They warn rather than refuse.** Each grammar knows the files that download
    and then cannot answer — draft heads and vision projectors for wllama,
    embedding and speech models for Transformers.js, a non-`-web` packaging for
-   LiteRT-LM — and says so in the log before the bytes move. Pointing a runtime
+   LiteRT-LM.js — and says so in the log before the bytes move. Pointing a runtime
    at one to see what it does is a legitimate thing to want from this page.
 
 None of these entries carries a size. The size is on the Hub and this page has

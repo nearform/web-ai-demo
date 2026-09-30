@@ -249,12 +249,12 @@ export const useRuntime = () => {
 
   // The calls made during the turn now in flight. A ref, not state, for two
   // reasons: they arrive from inside an adapter's stream loop where a render
-  // per call would be the same mistake as a render per chunk, and on LiteRT-LM
+  // per call would be the same mistake as a render per chunk, and on LiteRT-LM.js
   // the executing closure was bound at LOAD time and has no idea which turn it
   // is running under. The turn record reads this when it is built.
   const toolCallsRef = useRef([]);
   // The latest parse, reachable from a closure that outlives the render that
-  // made it. LiteRT-LM bakes tool declarations into the conversation preface at
+  // made it. LiteRT-LM.js bakes tool declarations into the conversation preface at
   // load, so its `execute` is years old by the time the model calls it; going
   // through the ref means an edit to the function BODY takes effect without a
   // reload, while a change to the declaration still does not — which is exactly
@@ -602,7 +602,7 @@ export const useRuntime = () => {
         trackNow({ provider: nextId });
         crumb(`provider: ${nextId}`);
         // Reset everything that is per-runtime. Notably the context control:
-        // 4096 means n_ctx on wllama and maxNumTokens on LiteRT-LM, and means
+        // 4096 means n_ctx on wllama and maxNumTokens on LiteRT-LM.js, and means
         // nothing at all on Transformers.js.
         setModels(next?.models ?? null);
         setModelsState(
@@ -714,7 +714,7 @@ export const useRuntime = () => {
         context,
         replyCap,
         // Offered to every adapter, used by the two that bind tools at create
-        // time — LiteRT-LM in `preface.tools`, Chrome in `create({ tools })`.
+        // time — LiteRT-LM.js in `preface.tools`, Chrome in `create({ tools })`.
         // The other three ignore it here and take the same payload per turn.
         tools: makeToolPayload(),
         log: logger,
@@ -723,7 +723,7 @@ export const useRuntime = () => {
       handleRef.current = handle;
 
       // Several runtimes can only tell you their real context budget after
-      // loading — Chrome because it is per-device, wllama and LiteRT-LM because
+      // loading — Chrome because it is per-device, wllama and LiteRT-LM.js because
       // the requested value may have been clamped. Surfaced so the control can
       // show what actually happened rather than what we asked for.
       if (handle?.discoveredContext) {
@@ -873,7 +873,7 @@ export const useRuntime = () => {
     ]);
 
     // Reset before the turn, read after it. Calls land here from inside the
-    // adapter — and on LiteRT-LM from a closure created at load — so this is the
+    // adapter — and on LiteRT-LM.js from a closure created at load — so this is the
     // only place that knows which turn they belonged to.
     toolCallsRef.current = [];
 
@@ -906,7 +906,7 @@ export const useRuntime = () => {
       const text = streamRef.current;
       const total = performance.now() - started;
       const ttft = firstChunkAt === null ? null : firstChunkAt - started;
-      // LiteRT-LM on the CPU backend computes the whole reply and then delivers
+      // LiteRT-LM.js on the CPU backend computes the whole reply and then delivers
       // every chunk at once — 123 chunks in the last 3 ms of a 9-second turn.
       // Dividing by (total - ttft) there produced a nonsense 39677 chunks/sec, so
       // the adapter tells us whether it streamed and the rate is withheld rather
@@ -1001,7 +1001,7 @@ export const useRuntime = () => {
         handle: handleRef.current,
         prompt: effectivePrompt,
         // The full history is always offered. The two runtimes that own their own
-        // history (Chrome, LiteRT-LM) ignore it — and that difference is one of
+        // history (Chrome, LiteRT-LM.js) ignore it — and that difference is one of
         // the things this demo exists to surface.
         messages: messagesRef.current.slice(),
         system,
@@ -1009,7 +1009,7 @@ export const useRuntime = () => {
         replyCap,
         json: jsonThisTurn ? { schema: JSON_SCHEMA } : null,
         // Same payload the load was given. The three that take tools per turn
-        // read it here; LiteRT-LM already has it and uses this only to notice
+        // read it here; LiteRT-LM.js already has it and uses this only to notice
         // that the declaration changed since the conversation was built.
         tools: makeToolPayload(),
         log: logger,
@@ -1116,7 +1116,7 @@ export const useRuntime = () => {
 
   // --- new chat -------------------------------------------------------------
   // Clearing the transcript is the easy half. The other half is that two of the
-  // five keep the conversation inside the runtime — a Chrome session, a LiteRT-LM
+  // five keep the conversation inside the runtime — a Chrome session, a LiteRT-LM.js
   // Conversation — so a page that only emptied `turns` would show a blank
   // conversation to a model that still remembers every word of the last one, and
   // the next reply would prove it. Those two get `resetConversation()`; the other

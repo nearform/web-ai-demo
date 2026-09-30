@@ -285,7 +285,7 @@ export default {
       const elapsedS = (performance.now() - startedAt) / 1000;
       // This runtime reports nothing about itself, so every figure here is ours,
       // counted from the streamer. That asymmetry is labeled rather than hidden:
-      // web-llm, wllama and LiteRT-LM give their own rates, this does not.
+      // web-llm, wllama and LiteRT-LM.js give their own rates, this does not.
       stats({
         tokensCountedByUs: tokenCount,
         tokensPerSecondCountedByUs:

@@ -250,7 +250,7 @@ export default {
     // account for future interactions until the session's context window is
     // full." So the controller's `messages` is deliberately not used here. This
     // is the sharpest difference between the five runtimes: everywhere except
-    // LiteRT-LM we resend the whole conversation and pay to re-prefill it.
+    // LiteRT-LM.js we resend the whole conversation and pay to re-prefill it.
     //
     // No await before promptStreaming: it returns the stream synchronously.
     const options = {};

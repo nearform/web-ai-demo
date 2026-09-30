@@ -42,7 +42,7 @@ const currentParams = () => new URLSearchParams(window.location.search);
  * Returns `{ providerId, model, pendingModel, warnings }`:
  *   - `providerId` is always a real id.
  *   - `model` is a validated id, or null to mean "use this runtime's default".
- *     For a runtime with a `customModel` (wllama, Transformers.js, LiteRT-LM),
+ *     For a runtime with a `customModel` (wllama, Transformers.js, LiteRT-LM.js),
  *     an id outside its list is accepted if it parses under that runtime's
  *     specifier grammar — the list is not a closed set there.
  *   - `pendingModel` is a model id that could NOT be validated yet because the

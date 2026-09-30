@@ -1,10 +1,10 @@
 /* global navigator:false, WebAssembly:false, fetch:false, caches:false, Response:false, TransformStream:false, performance:false */
 
-// Spike: LiteRT-LM (@litert-lm/core 0.15.0)
+// Spike: LiteRT-LM.js (@litert-lm/core 0.15.0)
 //
 // FIRST, THE NAME. This stop was originally called "LiteRT.js" and that was the
 // wrong product. LiteRT.js (`@litertjs/core`) runs general `.tflite` models and
-// its own docs send LLM users away. The LLM path is **LiteRT-LM**
+// its own docs send LLM users away. The LLM path is **LiteRT-LM.js**
 // (`@litert-lm/core`), documented at developers.google.com/edge/litert-lm/js.
 // MediaPipe's LLM Inference API — the older third name — is banner-flagged
 // maintenance-only and points here too. Three names, one of them ours to get
@@ -288,7 +288,7 @@ const openModelStream = async ({ url, log, progress }) => {
 };
 
 runSpike({
-  name: "LiteRT-LM",
+  name: "LiteRT-LM.js",
   docs: "https://developers.google.com/edge/litert-lm/js",
   notes:
     "Google's on-device runtime, and the newest of the five. The Conversation holds its own history, like Chrome and unlike the other three. No progress callback and no caching at all — both are hand-rolled here. Every model that exists is over a gigabyte, so there is no phone-sized entry to offer.",

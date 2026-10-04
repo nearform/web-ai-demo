@@ -3,16 +3,19 @@ import { listProviders } from "../providers/index.js";
 
 // The binding constraint on where a runtime can run, as a badge.
 //
-// For the four that download weights it is device capacity: the sizes involved
-// rule most of them out on a phone. For the Chrome Prompt API there are no
-// weights, so capacity is not the limit — availability is, and it is narrower
-// than any of the other four. A badge reading "any device" there was wrong in
-// both directions: no iOS browser has the API, and Chrome documents Android and
-// non-Chromebook-Plus ChromeOS as unsupported too.
+// For the four that download weights it is device capacity, and the tight case
+// is iOS, which caps the memory a browser tab can take in every iOS browser.
+// Elsewhere the limit is close to the device's GPU memory, so the badges speak
+// to iOS (measured on an iPhone 15 Pro) rather than to phones in general. For
+// the Chrome Prompt API there are no weights, so capacity is not the limit —
+// availability is, and it is narrower than any of the other four. A badge
+// reading "any device" there was wrong in both directions: no iOS browser has
+// the API, and Chrome documents Android and non-Chromebook-Plus ChromeOS as
+// unsupported too.
 export const FITS_LABEL = {
   "chrome-desktop": { text: "Chrome desktop only", tone: "bad" },
-  "phone-possible": { text: "desktop, maybe phone", tone: "warn" },
-  desktop: { text: "desktop only", tone: "warn" },
+  "ios-small": { text: "iOS: small models only", tone: "warn" },
+  "ios-crashes": { text: "iOS: tab is killed", tone: "warn" },
 };
 
 // The chooser. Every field comes from descriptors.js, which imports no libraries,

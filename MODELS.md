@@ -50,13 +50,13 @@ repo follows it. Sizes below are bytes read off the Hugging Face tree API on
 
 **wllama** (GGUF, so nearly everything is available):
 
-| Model        | File                           | Size     | Why it is here                                    |
-| ------------ | ------------------------------ | -------- | ------------------------------------------------- |
-| LFM2.5-350M  | `LFM2.5-350M-Q4_K_M.gguf`      | 218 MiB  | The comfortable iPhone pick                       |
-| Qwen3.5-0.8B | `Qwen3.5-0.8B-UD-Q2_K_XL.gguf` | 398 MiB  | Latest Qwen, at the iPhone budget edge            |
-| Qwen3.5-0.8B | `Qwen3.5-0.8B-Q4_K_M.gguf`     | 507 MiB  | Same model, honest quant — the size/quality pair  |
-| Qwen3.5-4B   | `Qwen3.5-4B-Q4_K_M.gguf`       | 2613 MiB | Desktop, and the >2 GiB single-file test          |
-| Gemma 4 E2B  | `gemma-4-E2B-it-Q4_0.gguf`     | 2709 MiB | Rule 1. Desktop only, and expected to be marginal |
+| Model        | File                           | Size     | Why it is here                                   |
+| ------------ | ------------------------------ | -------- | ------------------------------------------------ |
+| LFM2.5-350M  | `LFM2.5-350M-Q4_K_M.gguf`      | 218 MiB  | The comfortable iPhone pick                      |
+| Qwen3.5-0.8B | `Qwen3.5-0.8B-UD-Q2_K_XL.gguf` | 398 MiB  | Latest Qwen, at the iPhone budget edge           |
+| Qwen3.5-0.8B | `Qwen3.5-0.8B-Q4_K_M.gguf`     | 507 MiB  | Same model, honest quant — the size/quality pair |
+| Qwen3.5-4B   | `Qwen3.5-4B-Q4_K_M.gguf`       | 2613 MiB | Desktop, and the >2 GiB single-file test         |
+| Gemma 4 E2B  | `gemma-4-E2B-it-Q4_0.gguf`     | 2709 MiB | Rule 1. Too big for iOS                          |
 
 wllama also takes a repo **you** name, in the field under the picker — as do
 Transformers.js and LiteRT-LM.js, each under its own grammar; see "Models you name
@@ -139,8 +139,9 @@ Three consequences for the picker:
    name: the allowlist is the kind of fact that goes stale, and re-checking it
    should not require editing this repo.
 2. **The smallest thing that works is 1915 MiB**, ~5x the iPhone budget. So this
-   runtime is desktop-only by arithmetic, and the picker says so in its labels
-   rather than implying a phone option exists.
+   runtime is out of reach on iOS by arithmetic (and iOS kills the tab loading
+   it), and the picker says so in its labels rather than implying an iOS option
+   exists. Android is a different case: Google reports E2B running on a Pixel 9.
 3. **The backend belongs in the model id.** It is not a detail: it decides whether
    the `-web` packaging requirement applies at all, and whether prefill is 5.6 or
    500 tok/s. The spike encodes it as `BACKEND|url` for that reason. `Backend.GPU`
@@ -150,7 +151,9 @@ Three consequences for the picker:
 Note rule 2 (no Gemma 3 or earlier) removes what would otherwise look like the
 answer here: the small MediaPipe `-web.task` files at 238 MB and 668 MB are all
 Gemma 3, and they are gated behind a 401 anyway. License and policy land on the
-same files, from two directions.
+same files, from two directions. The same goes for `gemma3-1b-gpu-custom`
+(968.6 MB), the Gemma 3 1B `.litertlm` that Google ships for
+[Gemini CLI local model routing](https://geminicli.com/docs/core/local-model-routing/).
 
 ## Thinking is off, everywhere
 

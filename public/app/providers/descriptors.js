@@ -320,8 +320,8 @@ export const DESCRIPTORS = [
         "`unload()` leaves the instance reusable, which is not true of wllama or Transformers.js.",
     },
     device: {
-      fits: "phone-possible",
-      note: "Desktop for most of the catalog. Only the smallest entries are plausible on a phone.",
+      fits: "ios-small",
+      note: "On iOS, which caps the memory a browser tab can take, only the smallest entries fit: SmolLM2-135M runs on an iPhone 15 Pro in both Safari and Chrome for iOS. Elsewhere the limit is the device's GPU memory.",
     },
     browsers: {
       label: "needs WebGPU",
@@ -439,8 +439,8 @@ export const DESCRIPTORS = [
         "`exit()` leaves the instance spent, so each load constructs a new one. Dropping a reference without calling it frees nothing.",
     },
     device: {
-      fits: "phone-possible",
-      note: "The whole model stays in main memory even with layers on the GPU, against a 4 GiB WASM limit. The smallest GGUFs are the plausible phone candidates.",
+      fits: "ios-small",
+      note: "The whole model stays in main memory even with layers on the GPU, against a 4 GiB WASM limit. On iOS, which caps the memory a browser tab can take, the smallest GGUFs are the ones that fit: LFM2.5-350M runs on an iPhone 15 Pro in both Safari and Chrome for iOS.",
     },
     browsers: {
       label: "any, WebGPU optional",
@@ -470,13 +470,13 @@ export const DESCRIPTORS = [
         id: "unsloth/Qwen3.5-4B-GGUF|Qwen3.5-4B-Q4_K_M.gguf",
         label: "Qwen3.5-4B Q4_K_M",
         sizeMb: 2613,
-        note: "Over 2 GiB in a single file. Desktop.",
+        note: "Over 2 GiB in a single file. Too big for iOS.",
       },
       {
         id: "ggml-org/gemma-4-E2B-it-GGUF|gemma-4-E2B-it-Q4_0.gguf",
         label: "Gemma 4 E2B Q4_0",
         sizeMb: 2709,
-        note: "Desktop.",
+        note: "Too big for iOS.",
       },
     ],
   },
@@ -579,14 +579,14 @@ export const DESCRIPTORS = [
         "`dispose()` releases the session. A disposed pipeline must not be called again — doing so affects later loads in the same page.",
     },
     device: {
-      fits: "desktop",
+      fits: "ios-crashes",
       // Upstream: dtype q4 rather than q4f16 (issues #1599, #1416).
-      note: "Desktop. dtype is q4 rather than q4f16; upstream issues #1599 and #1416 cover q4f16 problems on WebGPU.",
+      note: "On an iPhone 15 Pro, LFM2.5-350M answers and then iOS kills the tab while it sits idle, in both Safari and Chrome for iOS. That looks like iOS's per-tab memory cap rather than the library, but it is untested on Android. dtype is q4 rather than q4f16; upstream issues #1599 and #1416 cover q4f16 problems on WebGPU.",
     },
     browsers: {
       label: "any, WebGPU optional",
       tone: "warn",
-      note: "Falls back to WASM without WebGPU. On Safari, 4.2.0 selects an ORT build without WebGPU support; upstream PR #1700 addresses that and is unreleased.",
+      note: "Falls back to WASM without WebGPU. Since 4.3.0, Safari gets an ORT build with WebGPU support (upstream PR #1700); 4.2.0 selected one without it.",
     },
     models: [
       {
@@ -610,7 +610,7 @@ export const DESCRIPTORS = [
         id: "onnx-community/gemma-4-E2B-it-ONNX",
         label: "Gemma 4 E2B q4",
         sizeMb: 3747,
-        note: "Eight files. Desktop.",
+        note: "Eight files. Too big for iOS.",
       },
     ],
   },
@@ -724,8 +724,8 @@ export const DESCRIPTORS = [
         "The conversation is deleted before the engine, since it holds a session against it. `unloadLiteRtLm()` would also drop the module, at the cost of re-downloading it.",
     },
     device: {
-      fits: "desktop",
-      note: "Desktop. The smallest model offered is 1915 MB.",
+      fits: "ios-crashes",
+      note: "The smallest model offered is 1915 MB, and iOS kills the tab while loading it, in both Safari and Chrome for iOS. Google reports Gemma 4 E2B running on Android (a Pixel 9).",
     },
     browsers: {
       label: "needs WebGPU",
@@ -741,7 +741,7 @@ export const DESCRIPTORS = [
         id: "GPU_ARTISAN|https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm",
         label: "Gemma 4 E2B -web — GPU_ARTISAN",
         sizeMb: 1915,
-        note: "The model Google documents for the web runtime. Desktop.",
+        note: "The model Google documents for the web runtime. Too big for iOS.",
       },
     ],
   },

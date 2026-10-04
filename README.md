@@ -119,11 +119,13 @@ read, because that list ships inside the library bundle.
 
 ## Notes
 
-- **Desktop Chrome so far.** The layout is built and checked for a phone — down
-  to 320px wide, portrait and landscape, on every runtime and every spike page —
-  but that check ran in Chrome's device emulation. Real iOS Safari and a real
-  phone are still untested, which is where the runtimes themselves are expected
-  to fail anyway.
+- **Tested on desktop Chrome and one iPhone 15 Pro** (Safari and Chrome for
+  iOS). On the iPhone, web-llm and wllama run their smallest models,
+  Transformers.js answers and then iOS kills the tab, LiteRT-LM.js is killed
+  while loading, and the Chrome Prompt API is unavailable. iOS caps the memory a
+  browser tab can take in every iOS browser, so read those as iOS results rather
+  than phone results; Android is untested here. The layout is checked down to
+  320px wide, portrait and landscape.
 - **Models**: one policy for every picker here, in [MODELS.md](MODELS.md). It
   governs the curated lists; wllama will also load a repo you name yourself.
 - **Spikes**: a bare page per runtime under [`public/spikes/`](public/spikes/),

@@ -353,9 +353,11 @@ export const useRuntime = () => {
   // the current selection without anyone having to press anything. Runs on mount
   // too, which canonicalises the link a reader arrived on: a mistyped model that
   // was ignored above disappears from the URL rather than staying in it to be
-  // copied on again.
+  // copied on again. A pending web-llm model stays in the URL until the catalog
+  // is read: `model` is still null then, and writing null would strip the very
+  // param the link arrived with.
   useEffect(() => {
-    writeDeepLink({ providerId, model });
+    writeDeepLink({ providerId, model: model ?? pendingModelRef.current });
   }, [providerId, model]);
 
   // --- crashbox -------------------------------------------------------------

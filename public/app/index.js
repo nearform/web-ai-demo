@@ -7,6 +7,8 @@ import { Chat } from "./components/Chat.js";
 import { CrashBanner, Diagnostics } from "./components/Diagnostics.js";
 
 const REPO_URL = "https://github.com/nearform/web-ai-demo";
+const BLOG_URL =
+  "https://nearform.com/digital-community/web-ai-runtimes-five-ways-to-run-a-language-model-in-the-browser";
 const BANNER_URL =
   "https://www.nearform.com/contact/?utm_source=open-source&utm_medium=banner&utm_campaign=os-project-pages";
 
@@ -25,7 +27,8 @@ export const App = () => {
         <p className="intro">
           Five ways to run a language model in the browser. No server, no build
           step, and no data leaves the device. By${" "}
-          <${ExtLink} href="https://nearform.com">Nearform<//>.${" "}
+          <${ExtLink} href="https://nearform.com">Nearform<//>. Read the${" "}
+          <${ExtLink} href=${BLOG_URL}>blog post<//>.${" "}
           <a
             href=${REPO_URL}
             target="_blank"

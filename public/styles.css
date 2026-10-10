@@ -74,6 +74,7 @@ body {
   color: var(--color-text-muted);
   font-size: 0.9rem;
   line-height: 1.5;
+  text-wrap: balance;
 }
 
 .intro a {
@@ -90,18 +91,21 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  vertical-align: text-bottom;
-  width: 22px;
-  height: 22px;
+  vertical-align: top;
+  width: 1lh;
+  height: 1lh;
   margin-left: 6px;
   background: var(--color-border);
   border-radius: 50%;
-  font-size: 0.85rem;
   color: var(--color-text-muted);
   text-decoration: none;
   transition:
     background 0.15s,
     color 0.15s;
+}
+
+.intro a.intro-github-link i {
+  font-size: 0.95em;
 }
 
 .intro a.intro-github-link:hover {
@@ -172,11 +176,5 @@ body {
   .intro {
     font-size: 0.8rem;
     line-height: 1.4;
-  }
-
-  .intro a.intro-github-link {
-    width: 32px;
-    height: 32px;
-    font-size: 1rem;
   }
 }

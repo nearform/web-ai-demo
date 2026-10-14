@@ -5,12 +5,11 @@ import { RuntimePanel } from "./components/RuntimePanel.js";
 import { Guidance } from "./components/Guidance.js";
 import { Chat } from "./components/Chat.js";
 import { CrashBanner, Diagnostics } from "./components/Diagnostics.js";
+import { Footer } from "./components/Footer.js";
 
 const REPO_URL = "https://github.com/nearform/web-ai-demo";
 const BLOG_URL =
   "https://nearform.com/digital-community/web-ai-runtimes-five-ways-to-run-a-language-model-in-the-browser";
-const BANNER_URL =
-  "https://www.nearform.com/contact/?utm_source=open-source&utm_medium=banner&utm_campaign=os-project-pages";
 
 const ExtLink = ({ href, children }) =>
   html`<a href=${href} target="_blank" rel="noopener noreferrer"
@@ -57,15 +56,7 @@ export const App = () => {
         <${Diagnostics} rt=${rt} />
       </main>
 
-      <footer className="footer">
-        <${ExtLink} href=${BANNER_URL}>
-          <img
-            src="https://raw.githubusercontent.com/nearform/.github/refs/heads/master/assets/os-banner-green.svg"
-            alt="Nearform Open Source"
-            className="nearform-banner"
-          />
-        <//>
-      </footer>
+      <${Footer} />
     </div>
   `;
 };

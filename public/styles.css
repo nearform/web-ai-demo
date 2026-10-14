@@ -146,6 +146,111 @@ body {
   flex-shrink: 0;
 }
 
+.footer--minimized {
+  padding: 8px 16px;
+  text-align: right;
+}
+
+.banner-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.banner-minimize-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  opacity: 0;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
+}
+
+/* Reveal on hover/focus so the banner reads clean until you reach for it. */
+.banner-wrapper:hover .banner-minimize-btn,
+.banner-wrapper:focus-within .banner-minimize-btn {
+  opacity: 1;
+}
+
+.banner-minimize-btn:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.banner-minimize-btn:hover {
+  background: white;
+  color: var(--color-text);
+}
+
+.banner-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.banner-mini-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  text-decoration: none;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.banner-mini-pill:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+
+.banner-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.banner-restore-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+
+.banner-restore-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 .nearform-banner {
   max-width: 100%;
   height: auto;
